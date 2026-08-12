@@ -1,0 +1,67 @@
+{
+  "name": "vscode-reference-tabs",
+  "displayName": "Reference Tabs",
+  "description": "Find All References / Find All Implementations results as persistent, closable tabs in a dedicated panel view.",
+  "version": "0.0.1",
+  "publisher": "joachimsejr",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "referenceTabs",
+          "title": "Reference Tabs",
+          "icon": "$(references)"
+        }
+      ]
+    },
+    "views": {
+      "referenceTabs": [
+        {
+          "type": "webview",
+          "id": "referenceTabs.panel",
+          "name": "Reference Tabs"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "referenceTabs.findReferences",
+        "title": "Reference Tabs: Find All References"
+      },
+      {
+        "command": "referenceTabs.findImplementations",
+        "title": "Reference Tabs: Find All Implementations"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "referenceTabs.findReferences",
+        "key": "ctrl+alt+a",
+        "when": "editorHasReferenceProvider && editorTextFocus"
+      },
+      {
+        "command": "referenceTabs.findImplementations",
+        "key": "ctrl+alt+s",
+        "when": "editorHasImplementationProvider && editorTextFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.0"
+  }
+}
