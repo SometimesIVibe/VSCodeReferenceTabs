@@ -1,25 +1,32 @@
 import * as vscode from "vscode";
-import { Search } from "../model";
+import { randomBytes } from "node:crypto";
 import { SearchStore } from "../store";
+import {
+  SearchSummary,
+  StateMessage,
+  WebviewToExtensionMessage,
+} from "./messages";
 
 /**
  * Provides the "Reference Tabs" WebviewView shown in the panel area.
  *
- * Step 2: renders a crude, HTML-escaped debug list of the store's searches
- * (tab name = symbol + kind + total, one line per file with its match
- * count). The real tabbed/collapsible UI lands in Step 3.
+ * Renders a static HTML shell that loads `media/panel.css` and
+ * `media/panel.js`; all actual tab/group/result rendering happens in the
+ * webview via the `state` message. This provider's job is: serve the shell,
+ * translate `SearchStore` state into `state` messages, and translate
+ * webview messages back into `SearchStore` mutations / editor commands.
  */
 export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   public static readonly viewType = "referenceTabs.panel";
 
   private view?: vscode.WebviewView;
-  private readonly storeSubscription: vscode.Disposable;
+  private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly store: SearchStore
   ) {
-    this.storeSubscription = this.store.onDidChange(() => this.render());
+    this.disposables.push(this.store.onDidChange(() => this.pushState()));
   }
 
   public resolveWebviewView(
@@ -31,133 +38,127 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [this.extensionUri],
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, "media")],
     };
 
-    this.render();
-  }
+    webviewView.webview.html = this.getHtml(webviewView.webview);
 
-  /** Placeholder for later steps: post a message to the webview. */
-  public postMessage(message: unknown): void {
-    void this.view?.webview.postMessage(message);
+    this.disposables.push(
+      webviewView.webview.onDidReceiveMessage((message: WebviewToExtensionMessage) =>
+        this.handleMessage(message)
+      )
+    );
   }
 
   public dispose(): void {
-    this.storeSubscription.dispose();
+    for (const disposable of this.disposables) {
+      disposable.dispose();
+    }
   }
 
-  private render(): void {
+  private handleMessage(message: WebviewToExtensionMessage): void {
+    switch (message.type) {
+      case "ready":
+        this.pushState();
+        break;
+      case "selectTab":
+        this.store.setActive(message.id);
+        break;
+      case "closeTab":
+        this.store.close(message.id);
+        break;
+      case "toggleGroup":
+        this.store.toggleGroup(message.id, message.uri, message.collapsed);
+        break;
+      case "setAllGroups":
+        this.store.setAllGroups(message.id, message.collapsed);
+        break;
+      case "open":
+        void this.openLocation(message);
+        break;
+    }
+  }
+
+  private async openLocation(message: {
+    uri: string;
+    line: number;
+    character: number;
+    endCharacter: number;
+  }): Promise<void> {
+    try {
+      const uri = vscode.Uri.parse(message.uri);
+      const selection = new vscode.Range(
+        new vscode.Position(message.line, message.character),
+        new vscode.Position(message.line, message.endCharacter)
+      );
+      await vscode.window.showTextDocument(uri, {
+        selection,
+        preserveFocus: false,
+      });
+    } catch {
+      void vscode.window.showWarningMessage("Reference Tabs: could not open that location.");
+    }
+  }
+
+  /** Posts the current `SearchStore` state to the webview (summaries for every tab, full data for the active one only). */
+  private pushState(): void {
     if (!this.view) {
       return;
     }
-    this.view.webview.html = this.getHtml();
+
+    const searches = this.store.all;
+    const activeId = this.store.activeId;
+
+    const summaries: SearchSummary[] = searches.map((search) => ({
+      id: search.id,
+      kind: search.kind,
+      symbol: search.symbol,
+      totalCount: search.totalCount,
+    }));
+
+    const active = searches.find((search) => search.id === activeId) ?? null;
+
+    const message: StateMessage = {
+      type: "state",
+      searches: summaries,
+      active,
+    };
+
+    void this.view.webview.postMessage(message);
   }
 
-  private getHtml(): string {
-    const searches = this.store.all;
-    const body =
-      searches.length === 0 ? this.getEmptyHtml() : this.getDebugListHtml(searches);
+  private getHtml(webview: vscode.Webview): string {
+    const nonce = getNonce();
+    const cssUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, "media", "panel.css")
+    );
+    const jsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, "media", "panel.js")
+    );
+
+    const csp = [
+      "default-src 'none'",
+      `style-src ${webview.cspSource}`,
+      `script-src 'nonce-${nonce}'`,
+    ].join("; ");
 
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';" />
+  <meta http-equiv="Content-Security-Policy" content="${csp}" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="${cssUri}" />
   <title>Reference Tabs</title>
-  <style>
-    ${this.getCss()}
-  </style>
 </head>
 <body>
-  ${body}
+  <div id="root"></div>
+  <script nonce="${nonce}" src="${jsUri}"></script>
 </body>
 </html>`;
   }
-
-  private getEmptyHtml(): string {
-    return `<div class="placeholder">No searches yet — press Ctrl+Alt+A on a symbol</div>`;
-  }
-
-  /** Crude debug rendering — real tab bar + collapsible groups arrive in Step 3. */
-  private getDebugListHtml(searches: readonly Search[]): string {
-    const activeId = this.store.activeId;
-
-    const entries = searches
-      .map((search) => {
-        const kindLabel = search.kind === "references" ? "refs" : "impl";
-        const header = `${escapeHtml(search.symbol)} (${kindLabel}) — ${search.totalCount}`;
-        const files = search.groups
-          .map(
-            (group) =>
-              `<li>${escapeHtml(group.relativePath)} (${group.items.length})</li>`
-          )
-          .join("");
-        const activeClass = search.id === activeId ? " active" : "";
-
-        return `<div class="search${activeClass}">
-    <div class="search-header">${header}</div>
-    <ul class="file-list">${files}</ul>
-  </div>`;
-      })
-      .join("\n");
-
-    return `<div class="debug-list">\n${entries}\n</div>`;
-  }
-
-  private getCss(): string {
-    return `
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      color: var(--vscode-foreground);
-      background-color: var(--vscode-editor-background);
-      font-family: var(--vscode-font-family);
-      font-size: var(--vscode-font-size);
-    }
-    .placeholder {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      padding: 16px;
-      box-sizing: border-box;
-      text-align: center;
-      color: var(--vscode-descriptionForeground);
-    }
-    .debug-list {
-      padding: 8px;
-      box-sizing: border-box;
-    }
-    .search {
-      margin-bottom: 12px;
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 4px;
-      padding: 6px 8px;
-    }
-    .search.active {
-      border-color: var(--vscode-focusBorder);
-    }
-    .search-header {
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-    .file-list {
-      margin: 0;
-      padding-left: 18px;
-      font-size: 0.9em;
-      color: var(--vscode-descriptionForeground);
-    }
-    `;
-  }
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+function getNonce(): string {
+  return randomBytes(16).toString("base64");
 }
