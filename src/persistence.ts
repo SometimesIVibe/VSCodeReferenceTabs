@@ -81,6 +81,12 @@ export class SearchPersistence implements vscode.Disposable {
         if (!isSearch(parsed)) {
           throw new Error("not a Search");
         }
+        // v0.2.0 files predate `word`; default it to `symbol` so old
+        // persisted searches still load (and rerun still works, since
+        // symbol === word for every search that predates accessor labels).
+        if (typeof parsed.word !== "string") {
+          parsed.word = parsed.symbol;
+        }
         results.push(parsed);
       } catch {
         try {

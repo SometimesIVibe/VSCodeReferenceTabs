@@ -5,6 +5,13 @@ import { FileGroup, Search, SearchKind, SearchResultItem } from "./model";
 /** Preview lines are trimmed then capped to this many characters. */
 const MAX_LINE_LENGTH = 200;
 
+/**
+ * Raw cursor tokens that get an enclosing-symbol prefix in the display
+ * label (C# property/indexer/event accessors). Any language: false
+ * positives just produce a slightly-too-rich label, never a wrong search.
+ */
+const ACCESSOR_WORDS = new Set(["get", "set", "init", "add", "remove"]);
+
 interface NormalizedLocation {
   uri: vscode.Uri;
   range: vscode.Range;
@@ -30,7 +37,8 @@ export async function runSearch(
     void vscode.window.showWarningMessage("Reference Tabs: no symbol found at the cursor.");
     return undefined;
   }
-  const symbol = document.getText(wordRange);
+  const word = document.getText(wordRange);
+  const symbol = await composeLabel(document, wordRange.start, word);
 
   const command =
     kind === "references"
@@ -58,6 +66,7 @@ export async function runSearch(
     id: randomUUID(),
     kind,
     symbol,
+    word,
     originUri: document.uri.toString(),
     originLine: position.line,
     createdAt: Date.now(),
@@ -67,16 +76,77 @@ export async function runSearch(
 }
 
 /**
+ * Composes the display label for the cursor word: for an accessor keyword
+ * (`get`/`set`/`init`/`add`/`remove`), prefixes it with the name of the
+ * innermost enclosing document symbol (e.g. `Name.get`); otherwise returns
+ * `word` unchanged. Falls back to `word` whenever the symbol provider
+ * returns nothing usable (no provider, empty result, or a `SymbolInformation[]`
+ * result — those lack `.children`/nested ranges, so descent degrades to "no match").
+ */
+async function composeLabel(
+  document: vscode.TextDocument,
+  position: vscode.Position,
+  word: string
+): Promise<string> {
+  if (!ACCESSOR_WORDS.has(word)) {
+    return word;
+  }
+
+  let root: vscode.DocumentSymbol[] | undefined;
+  try {
+    root = await vscode.commands.executeCommand<vscode.DocumentSymbol[] | undefined>(
+      "vscode.executeDocumentSymbolProvider",
+      document.uri
+    );
+  } catch {
+    return word;
+  }
+
+  const enclosing = findInnermostSymbol(root, position);
+  return enclosing ? `${enclosing.name}.${word}` : word;
+}
+
+/**
+ * Recursively descends `symbols` (and their `.children`) to find the
+ * deepest symbol whose `range` contains `position`. Returns `undefined` if
+ * `symbols` is missing/empty, or its items aren't `DocumentSymbol`-shaped
+ * (e.g. a `SymbolInformation[]` result, which has no `.range`/`.children`).
+ */
+function findInnermostSymbol(
+  symbols: vscode.DocumentSymbol[] | undefined,
+  position: vscode.Position
+): vscode.DocumentSymbol | undefined {
+  if (!Array.isArray(symbols)) {
+    return undefined;
+  }
+
+  for (const symbol of symbols) {
+    if (!symbol || !(symbol.range instanceof vscode.Range) || !symbol.range.contains(position)) {
+      continue;
+    }
+    const deeper = findInnermostSymbol(symbol.children, position);
+    // Some providers emit the accessor itself as a nested symbol; naming the
+    // tab after it would produce labels like "get.get", so prefer its parent.
+    if (deeper && !ACCESSOR_WORDS.has(deeper.name)) {
+      return deeper;
+    }
+    return ACCESSOR_WORDS.has(symbol.name) ? undefined : symbol;
+  }
+  return undefined;
+}
+
+/**
  * Re-executes `search` from its stored origin location (`originUri` /
  * `originLine`), producing a fresh {@link Search} that keeps the original
  * `id` and `createdAt` (so it replaces the existing tab in place) but has
  * up-to-date `groups` / `totalCount`.
  *
  * The exact origin position isn't stored (only the line), so this looks up
- * the stored `symbol` text on that line and re-resolves a word range there.
- * Returns `undefined` (after showing a warning) if the origin document can't
- * be opened, or the symbol text is no longer found on that line — in both
- * cases the caller should keep the existing tab's results untouched.
+ * the stored raw `word` (not the possibly-composed `symbol` label) on that
+ * line and re-resolves a word range there. Returns `undefined` (after
+ * showing a warning) if the origin document can't be opened, or the word
+ * text is no longer found on that line — in both cases the caller should
+ * keep the existing tab's results untouched.
  */
 export async function rerunSearch(search: Search): Promise<Search | undefined> {
   let document: vscode.TextDocument;
@@ -97,7 +167,7 @@ export async function rerunSearch(search: Search): Promise<Search | undefined> {
   }
 
   const lineText = document.lineAt(search.originLine).text;
-  const symbolIndex = lineText.indexOf(search.symbol);
+  const symbolIndex = lineText.indexOf(search.word);
   if (symbolIndex === -1) {
     void vscode.window.showWarningMessage(
       `Reference Tabs: '${search.symbol}' is no longer at its original location.`

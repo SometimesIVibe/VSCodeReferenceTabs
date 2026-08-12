@@ -37,8 +37,19 @@ export interface Search {
   /** Stable unique id, `crypto.randomUUID()`. */
   id: string;
   kind: SearchKind;
-  /** Word at the cursor when the search was triggered. */
+  /**
+   * Display label shown in tabs and the badge tooltip. Usually equal to
+   * `word`, but for an accessor keyword (`get`/`set`/`init`/`add`/`remove`)
+   * it is composed as `${enclosingSymbolName}.${word}` (e.g. `Name.get`).
+   */
   symbol: string;
+  /**
+   * Raw token under the cursor when the search was triggered, used by
+   * `rerunSearch` to relocate the position on the origin line. `symbol` may
+   * differ from this (accessor searches); non-accessor searches have
+   * `symbol === word`.
+   */
+  word: string;
   /** `vscode.Uri.toString()` of the document the search originated from. */
   originUri: string;
   /** 0-based line the cursor was on when the search was triggered. */
