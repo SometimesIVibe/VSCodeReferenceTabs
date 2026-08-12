@@ -1,11 +1,19 @@
 import * as vscode from "vscode";
 import { PanelViewProvider } from "./panel/PanelViewProvider";
 import { runSearch } from "./search";
-import { SearchKind } from "./model";
+import { Search, SearchKind } from "./model";
 import { SearchStore } from "./store";
+import { SearchPersistence } from "./persistence";
+
+const TAB_ORDER_KEY = "referenceTabs.tabOrder";
+const ACTIVE_ID_KEY = "referenceTabs.activeId";
 
 export function activate(context: vscode.ExtensionContext): void {
-  const store = new SearchStore();
+  const storageUri = context.storageUri ?? context.globalStorageUri;
+  const persistence = new SearchPersistence(storageUri);
+  context.subscriptions.push(persistence);
+
+  const store = new SearchStore(persistence, context.workspaceState);
   context.subscriptions.push(store);
 
   const provider = new PanelViewProvider(context.extensionUri, store);
@@ -47,6 +55,54 @@ export function activate(context: vscode.ExtensionContext): void {
     store.add(search);
     await vscode.commands.executeCommand("referenceTabs.panel.focus");
   }
+
+  // Fire-and-forget: does not block activation. `store.seed` prepends
+  // restored searches ahead of anything a user command already added while
+  // this was loading, so a fast `Ctrl+Alt+A` right after window-reload
+  // can't be clobbered by a slow restore.
+  void restore(context, persistence, store);
+}
+
+/** Loads persisted searches, orders them by the saved tab order (falling back to `createdAt`), and seeds `store`. */
+async function restore(
+  context: vscode.ExtensionContext,
+  persistence: SearchPersistence,
+  store: SearchStore
+): Promise<void> {
+  const loaded = await persistence.loadAll();
+  if (loaded.length === 0) {
+    return;
+  }
+
+  const savedOrder = context.workspaceState.get<string[]>(TAB_ORDER_KEY) ?? [];
+  const savedActiveId = context.workspaceState.get<string>(ACTIVE_ID_KEY);
+
+  const ordered = orderByTabOrder(loaded, savedOrder);
+  const activeId =
+    savedActiveId !== undefined && ordered.some((s) => s.id === savedActiveId)
+      ? savedActiveId
+      : ordered[ordered.length - 1]?.id;
+
+  store.seed(ordered, activeId);
+}
+
+/** Orders `searches` by their position in `savedOrder`; searches missing from `savedOrder` are appended, sorted by `createdAt` ascending. */
+function orderByTabOrder(searches: readonly Search[], savedOrder: readonly string[]): Search[] {
+  const byId = new Map(searches.map((s) => [s.id, s]));
+  const ordered: Search[] = [];
+
+  for (const id of savedOrder) {
+    const search = byId.get(id);
+    if (search) {
+      ordered.push(search);
+      byId.delete(id);
+    }
+  }
+
+  const remaining = [...byId.values()].sort((a, b) => a.createdAt - b.createdAt);
+  ordered.push(...remaining);
+
+  return ordered;
 }
 
 export function deactivate(): void {
