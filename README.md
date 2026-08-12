@@ -14,6 +14,14 @@ All Implementations" flow with persistent, closable **tabs** in a dedicated
 
 <!-- TODO: screenshot of the Reference Tabs panel with two open tabs, one expanded -->
 
+## Install
+
+Install from a packaged `.vsix`:
+
+```sh
+code --install-extension vscode-reference-tabs-0.1.0.vsix
+```
+
 ## Shortcuts
 
 | Keybinding   | Command                                | When                                           |
