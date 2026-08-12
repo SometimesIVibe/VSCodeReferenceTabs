@@ -9,6 +9,10 @@ All Implementations" flow with persistent, closable **tabs** in a dedicated
 - Tabs are written to disk and restored automatically after **Reload Window**.
 - Results are grouped per file, with per-group and expand-all/collapse-all
   controls.
+- Preview lines are syntax-highlighted by file type (C#, TypeScript,
+  JavaScript, HTML/XML, CSS, JSON, Java, Python, Go, Rust, SQL, YAML,
+  Markdown, Bash), in light, dark and high-contrast themes, with the search
+  match still highlighted on top even when it spans a token boundary.
 - Both search commands are bound to left-hand-only shortcuts, so your right
   hand can stay on the mouse.
 
@@ -19,7 +23,7 @@ All Implementations" flow with persistent, closable **tabs** in a dedicated
 Install from a packaged `.vsix`:
 
 ```sh
-code --install-extension vscode-reference-tabs-0.1.0.vsix
+code --install-extension vscode-reference-tabs-0.2.0.vsix
 ```
 
 ## Shortcuts

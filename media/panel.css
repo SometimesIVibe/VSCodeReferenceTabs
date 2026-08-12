@@ -225,3 +225,106 @@ body {
 .result-text .match {
   background-color: var(--vscode-editor-findMatchHighlightBackground);
 }
+
+/* Syntax-highlighting palette (highlight.js token classes).
+   The webview has no access to the active editor theme's real token
+   colors, so these are our own hues, based on VS Code's built-in
+   Dark+/Light+ default token colors. Kept separate from `.match` above —
+   the match background layers on top of whichever of these applies. */
+
+body.vscode-dark .hljs-keyword,
+body.vscode-dark .hljs-literal {
+  color: #569cd6;
+}
+
+body.vscode-dark .hljs-string {
+  color: #ce9178;
+}
+
+body.vscode-dark .hljs-title,
+body.vscode-dark .hljs-title.function_,
+body.vscode-dark .hljs-title.class_ {
+  color: #dcdcaa;
+}
+
+body.vscode-dark .hljs-comment {
+  color: #6a9955;
+}
+
+body.vscode-dark .hljs-number {
+  color: #b5cea8;
+}
+
+body.vscode-dark .hljs-built_in {
+  color: #4ec9b0;
+}
+
+body.vscode-dark .hljs-type {
+  color: #4ec9b0;
+}
+
+body.vscode-dark .hljs-attr,
+body.vscode-dark .hljs-attribute {
+  color: #9cdcfe;
+}
+
+body.vscode-dark .hljs-meta {
+  color: #9b9b9b;
+}
+
+body.vscode-light .hljs-keyword,
+body.vscode-light .hljs-literal {
+  color: #0000ff;
+}
+
+body.vscode-light .hljs-string {
+  color: #a31515;
+}
+
+body.vscode-light .hljs-title,
+body.vscode-light .hljs-title.function_,
+body.vscode-light .hljs-title.class_ {
+  color: #795e26;
+}
+
+body.vscode-light .hljs-comment {
+  color: #008000;
+}
+
+body.vscode-light .hljs-number {
+  color: #098658;
+}
+
+body.vscode-light .hljs-built_in {
+  color: #267f99;
+}
+
+body.vscode-light .hljs-type {
+  color: #267f99;
+}
+
+body.vscode-light .hljs-attr,
+body.vscode-light .hljs-attribute {
+  color: #001080;
+}
+
+body.vscode-light .hljs-meta {
+  color: #767676;
+}
+
+/* High contrast: no token colors (accessibility contract of the theme) —
+   plain foreground text, same as unhighlighted lines. `.match` above still
+   applies since it only sets a background. */
+body.vscode-high-contrast .hljs-keyword,
+body.vscode-high-contrast .hljs-literal,
+body.vscode-high-contrast .hljs-string,
+body.vscode-high-contrast .hljs-title,
+body.vscode-high-contrast .hljs-comment,
+body.vscode-high-contrast .hljs-number,
+body.vscode-high-contrast .hljs-built_in,
+body.vscode-high-contrast .hljs-type,
+body.vscode-high-contrast .hljs-attr,
+body.vscode-high-contrast .hljs-attribute,
+body.vscode-high-contrast .hljs-meta {
+  color: inherit;
+}

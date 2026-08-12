@@ -149,6 +149,9 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
     const cssUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, "media", "panel.css")
     );
+    const hljsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, "media", "hljs.js")
+    );
     const jsUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, "media", "panel.js")
     );
@@ -170,6 +173,7 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
 </head>
 <body>
   <div id="root"></div>
+  <script nonce="${nonce}" src="${hljsUri}"></script>
   <script nonce="${nonce}" src="${jsUri}"></script>
 </body>
 </html>`;

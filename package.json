@@ -2,7 +2,7 @@
   "name": "vscode-reference-tabs",
   "displayName": "Reference Tabs",
   "description": "Find All References / Find All Implementations results as persistent, closable tabs in a dedicated panel view.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "joachimsejr",
   "license": "MIT",
   "icon": "icon.png",
@@ -130,5 +130,8 @@
     "@types/vscode": "^1.90.0",
     "esbuild": "^0.23.0",
     "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "highlight.js": "^11.12.0"
   }
 }
