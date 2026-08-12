@@ -1,12 +1,13 @@
 import * as vscode from "vscode";
 import { PanelViewProvider } from "./panel/PanelViewProvider";
-import { runSearch } from "./search";
+import { rerunSearch, runSearch } from "./search";
 import { Search, SearchKind } from "./model";
-import { SearchStore } from "./store";
+import { DEFAULT_MAX_SEARCHES, SearchStore } from "./store";
 import { SearchPersistence } from "./persistence";
 
 const TAB_ORDER_KEY = "referenceTabs.tabOrder";
 const ACTIVE_ID_KEY = "referenceTabs.activeId";
+const CONFIG_SECTION = "referenceTabs";
 
 export function activate(context: vscode.ExtensionContext): void {
   const storageUri = context.storageUri ?? context.globalStorageUri;
@@ -15,6 +16,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const store = new SearchStore(persistence, context.workspaceState);
   context.subscriptions.push(store);
+  store.setMaxSearches(readMaxSearches());
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration(CONFIG_SECTION)) {
+        store.setMaxSearches(readMaxSearches());
+      }
+    })
+  );
 
   const provider = new PanelViewProvider(context.extensionUri, store);
   context.subscriptions.push(provider);
@@ -39,6 +49,14 @@ export function activate(context: vscode.ExtensionContext): void {
     )
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand("referenceTabs.clearAll", () => clearAllCommand())
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("referenceTabs.rerun", () => rerunCommand())
+  );
+
   async function runSearchCommand(kind: SearchKind): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
@@ -53,7 +71,46 @@ export function activate(context: vscode.ExtensionContext): void {
     }
 
     store.add(search);
-    await vscode.commands.executeCommand("referenceTabs.panel.focus");
+
+    if (readAutoReveal()) {
+      await vscode.commands.executeCommand("referenceTabs.panel.focus");
+    }
+  }
+
+  async function clearAllCommand(): Promise<void> {
+    if (store.all.length === 0) {
+      void vscode.window.showInformationMessage("Reference Tabs: no tabs to clear.");
+      return;
+    }
+
+    const yes = "Yes";
+    const choice = await vscode.window.showWarningMessage(
+      "Reference Tabs: close all tabs and delete their saved results?",
+      { modal: false },
+      yes
+    );
+    if (choice !== yes) {
+      return;
+    }
+
+    store.clearAll();
+  }
+
+  async function rerunCommand(): Promise<void> {
+    const activeId = store.activeId;
+    const activeSearch = store.all.find((search) => search.id === activeId);
+    if (!activeSearch) {
+      void vscode.window.showInformationMessage("Reference Tabs: no active tab to re-run.");
+      return;
+    }
+
+    const refreshed = await rerunSearch(activeSearch);
+    if (!refreshed) {
+      // rerunSearch already showed a user-facing message; keep old results.
+      return;
+    }
+
+    store.replace(refreshed);
   }
 
   // Fire-and-forget: does not block activation. `store.seed` prepends
@@ -61,6 +118,17 @@ export function activate(context: vscode.ExtensionContext): void {
   // this was loading, so a fast `Ctrl+Alt+A` right after window-reload
   // can't be clobbered by a slow restore.
   void restore(context, persistence, store);
+}
+
+function readMaxSearches(): number {
+  const value = vscode.workspace
+    .getConfiguration(CONFIG_SECTION)
+    .get<number>("maxSearches", DEFAULT_MAX_SEARCHES);
+  return typeof value === "number" && value > 0 ? value : DEFAULT_MAX_SEARCHES;
+}
+
+function readAutoReveal(): boolean {
+  return vscode.workspace.getConfiguration(CONFIG_SECTION).get<boolean>("autoReveal", true);
 }
 
 /** Loads persisted searches, orders them by the saved tab order (falling back to `createdAt`), and seeds `store`. */

@@ -2,8 +2,8 @@ import * as vscode from "vscode";
 import { Search } from "./model";
 import { SearchPersistence } from "./persistence";
 
-/** Hard cap on stored searches; adding beyond this evicts the oldest (by `createdAt`). */
-export const MAX_SEARCHES = 30;
+/** Fallback cap on stored searches (mirrors the `referenceTabs.maxSearches` setting default) used before the setting is read. */
+export const DEFAULT_MAX_SEARCHES = 30;
 
 const TAB_ORDER_KEY = "referenceTabs.tabOrder";
 const ACTIVE_ID_KEY = "referenceTabs.activeId";
@@ -24,6 +24,7 @@ const ACTIVE_ID_KEY = "referenceTabs.activeId";
 export class SearchStore implements vscode.Disposable {
   private readonly searches: Search[] = [];
   private activeSearchId: string | undefined;
+  private maxSearches: number = DEFAULT_MAX_SEARCHES;
 
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   public readonly onDidChange = this._onDidChange.event;
@@ -32,6 +33,17 @@ export class SearchStore implements vscode.Disposable {
     private readonly persistence?: SearchPersistence,
     private readonly workspaceState?: vscode.Memento
   ) {}
+
+  /** Sets the cap on stored searches (backed by the `referenceTabs.maxSearches` setting). Evicts immediately if the new cap is lower than the current count. */
+  public setMaxSearches(max: number): void {
+    this.maxSearches = Math.max(1, Math.trunc(max) || DEFAULT_MAX_SEARCHES);
+    const before = this.searches.length;
+    this.evictOverflow();
+    if (this.searches.length !== before) {
+      this.persistTabState();
+      this._onDidChange.fire();
+    }
+  }
 
   /** All searches, oldest first. */
   public get all(): readonly Search[] {
@@ -42,25 +54,44 @@ export class SearchStore implements vscode.Disposable {
     return this.activeSearchId;
   }
 
-  /** Adds a new search and makes it the active one. Persists immediately and evicts the oldest search past `MAX_SEARCHES`. */
+  /** Adds a new search and makes it the active one. Persists immediately and evicts the oldest search past the configured max (see {@link setMaxSearches}). */
   public add(search: Search): void {
     this.searches.push(search);
     this.activeSearchId = search.id;
 
     void this.persistence?.saveSearch(search);
+    this.evictOverflow();
 
-    while (this.searches.length > MAX_SEARCHES) {
-      const oldest = this.oldestSearch();
-      if (!oldest) {
-        break;
-      }
-      const index = this.searches.indexOf(oldest);
-      this.searches.splice(index, 1);
-      void this.persistence?.deleteSearch(oldest.id);
-      if (this.activeSearchId === oldest.id) {
-        const neighborIndex = Math.min(index, this.searches.length - 1);
-        this.activeSearchId = neighborIndex >= 0 ? this.searches[neighborIndex].id : undefined;
-      }
+    this.persistTabState();
+    this._onDidChange.fire();
+  }
+
+  /**
+   * Replaces the search with the same `id` as `search` in place (same tab
+   * position), swapping in fresh groups/counts. Used by the rerun command.
+   * No-op if no search with that id exists. Persists and notifies.
+   */
+  public replace(search: Search): void {
+    const index = this.searches.findIndex((s) => s.id === search.id);
+    if (index === -1) {
+      return;
+    }
+    this.searches[index] = search;
+    void this.persistence?.saveSearch(search);
+    this._onDidChange.fire();
+  }
+
+  /** Closes every tab and deletes all persisted search files. */
+  public clearAll(): void {
+    if (this.searches.length === 0) {
+      return;
+    }
+    const ids = this.searches.map((s) => s.id);
+    this.searches.length = 0;
+    this.activeSearchId = undefined;
+
+    for (const id of ids) {
+      void this.persistence?.deleteSearch(id);
     }
 
     this.persistTabState();
@@ -165,6 +196,23 @@ export class SearchStore implements vscode.Disposable {
 
   public dispose(): void {
     this._onDidChange.dispose();
+  }
+
+  /** Evicts oldest searches (by `createdAt`) until the count is within `maxSearches`. */
+  private evictOverflow(): void {
+    while (this.searches.length > this.maxSearches) {
+      const oldest = this.oldestSearch();
+      if (!oldest) {
+        break;
+      }
+      const index = this.searches.indexOf(oldest);
+      this.searches.splice(index, 1);
+      void this.persistence?.deleteSearch(oldest.id);
+      if (this.activeSearchId === oldest.id) {
+        const neighborIndex = Math.min(index, this.searches.length - 1);
+        this.activeSearchId = neighborIndex >= 0 ? this.searches[neighborIndex].id : undefined;
+      }
+    }
   }
 
   private oldestSearch(): Search | undefined {

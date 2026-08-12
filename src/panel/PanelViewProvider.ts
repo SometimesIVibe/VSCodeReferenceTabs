@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
+import { Search } from "../model";
 import { SearchStore } from "../store";
 import {
   SearchSummary,
@@ -125,6 +126,22 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
     };
 
     void this.view.webview.postMessage(message);
+    this.updateBadge(active);
+  }
+
+  /** Mirrors the active search's result count onto the view's badge (visible even when the panel isn't focused, e.g. with `autoReveal` off). Clears the badge when there is no active search or it has no results. */
+  private updateBadge(active: Search | null): void {
+    if (!this.view) {
+      return;
+    }
+    if (!active || !active.totalCount) {
+      this.view.badge = undefined;
+      return;
+    }
+    this.view.badge = {
+      value: active.totalCount,
+      tooltip: `${active.symbol}: ${active.totalCount} results`,
+    };
   }
 
   private getHtml(webview: vscode.Webview): string {

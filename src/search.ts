@@ -66,6 +66,83 @@ export async function runSearch(
   };
 }
 
+/**
+ * Re-executes `search` from its stored origin location (`originUri` /
+ * `originLine`), producing a fresh {@link Search} that keeps the original
+ * `id` and `createdAt` (so it replaces the existing tab in place) but has
+ * up-to-date `groups` / `totalCount`.
+ *
+ * The exact origin position isn't stored (only the line), so this looks up
+ * the stored `symbol` text on that line and re-resolves a word range there.
+ * Returns `undefined` (after showing a warning) if the origin document can't
+ * be opened, or the symbol text is no longer found on that line — in both
+ * cases the caller should keep the existing tab's results untouched.
+ */
+export async function rerunSearch(search: Search): Promise<Search | undefined> {
+  let document: vscode.TextDocument;
+  try {
+    document = await vscode.workspace.openTextDocument(vscode.Uri.parse(search.originUri));
+  } catch {
+    void vscode.window.showWarningMessage(
+      `Reference Tabs: could not reopen the origin file for '${search.symbol}'.`
+    );
+    return undefined;
+  }
+
+  if (search.originLine < 0 || search.originLine >= document.lineCount) {
+    void vscode.window.showWarningMessage(
+      `Reference Tabs: '${search.symbol}' is no longer at its original location.`
+    );
+    return undefined;
+  }
+
+  const lineText = document.lineAt(search.originLine).text;
+  const symbolIndex = lineText.indexOf(search.symbol);
+  if (symbolIndex === -1) {
+    void vscode.window.showWarningMessage(
+      `Reference Tabs: '${search.symbol}' is no longer at its original location.`
+    );
+    return undefined;
+  }
+
+  const position = new vscode.Position(search.originLine, symbolIndex);
+  const wordRange = document.getWordRangeAtPosition(position);
+  if (!wordRange) {
+    void vscode.window.showWarningMessage(
+      `Reference Tabs: '${search.symbol}' is no longer at its original location.`
+    );
+    return undefined;
+  }
+
+  const command =
+    search.kind === "references"
+      ? "vscode.executeReferenceProvider"
+      : "vscode.executeImplementationProvider";
+
+  const raw = await vscode.commands.executeCommand<
+    (vscode.Location | vscode.LocationLink)[] | undefined
+  >(command, document.uri, wordRange.start);
+
+  const normalized = normalizeLocations(raw ?? []);
+
+  if (normalized.length === 0) {
+    const kindLabel = search.kind === "references" ? "references" : "implementations";
+    void vscode.window.showInformationMessage(
+      `Reference Tabs: no ${kindLabel} found for '${search.symbol}'.`
+    );
+    return undefined;
+  }
+
+  const groups = await buildGroups(normalized);
+  const totalCount = groups.reduce((sum, group) => sum + group.items.length, 0);
+
+  return {
+    ...search,
+    groups,
+    totalCount,
+  };
+}
+
 /** `vscode.executeImplementationProvider` may return `LocationLink[]`; flatten both shapes to `{ uri, range }`. */
 function normalizeLocations(
   raw: readonly (vscode.Location | vscode.LocationLink)[]

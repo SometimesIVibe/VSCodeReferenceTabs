@@ -33,13 +33,53 @@
     "commands": [
       {
         "command": "referenceTabs.findReferences",
-        "title": "Reference Tabs: Find All References"
+        "title": "Reference Tabs: Find All References",
+        "shortTitle": "Find References (Tabs)"
       },
       {
         "command": "referenceTabs.findImplementations",
-        "title": "Reference Tabs: Find All Implementations"
+        "title": "Reference Tabs: Find All Implementations",
+        "shortTitle": "Find Implementations (Tabs)"
+      },
+      {
+        "command": "referenceTabs.clearAll",
+        "title": "Reference Tabs: Clear All Tabs",
+        "shortTitle": "Clear All",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "referenceTabs.rerun",
+        "title": "Reference Tabs: Re-run Search",
+        "shortTitle": "Re-run",
+        "icon": "$(refresh)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "referenceTabs.rerun",
+          "when": "view == referenceTabs.panel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "referenceTabs.clearAll",
+          "when": "view == referenceTabs.panel",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "referenceTabs.findReferences",
+          "when": "editorHasReferenceProvider && editorTextFocus",
+          "group": "navigation"
+        },
+        {
+          "command": "referenceTabs.findImplementations",
+          "when": "editorHasImplementationProvider && editorTextFocus",
+          "group": "navigation"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "referenceTabs.findReferences",
@@ -51,7 +91,22 @@
         "key": "ctrl+alt+s",
         "when": "editorHasImplementationProvider && editorTextFocus"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Reference Tabs",
+      "properties": {
+        "referenceTabs.autoReveal": {
+          "type": "boolean",
+          "default": true,
+          "description": "Focus the Reference Tabs panel after running a search. When disabled, new/updated results are shown silently (the view badge still updates)."
+        },
+        "referenceTabs.maxSearches": {
+          "type": "number",
+          "default": 30,
+          "description": "Maximum number of search tabs to keep. The oldest tab is evicted once this limit is exceeded."
+        }
+      }
+    }
   },
   "scripts": {
     "build": "node esbuild.mjs",
