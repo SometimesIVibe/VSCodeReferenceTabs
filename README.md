@@ -23,7 +23,7 @@ All Implementations" flow with persistent, closable **tabs** in a dedicated
 Install from a packaged `.vsix`:
 
 ```sh
-code --install-extension vscode-reference-tabs-0.2.1.vsix
+code --install-extension vscode-reference-tabs-0.2.2.vsix
 ```
 
 ## Shortcuts
