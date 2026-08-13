@@ -97,9 +97,9 @@ suite("search (end-to-end against the fixture workspace)", () => {
     assert.ok(search, "expected a search result");
     assert.strictEqual(search!.word, "get");
     // The built-in TypeScript document-symbol provider names a getter
-    // "(get) greeting" (not bare "greeting"), so composeLabel's
-    // `${enclosing.name}.${word}` yields this rather than a bare "greeting.get".
-    assert.strictEqual(search!.symbol, "(get) greeting.get");
+    // "(get) greeting"; composeLabel strips that accessor prefix since the
+    // `.get` suffix already carries it.
+    assert.strictEqual(search!.symbol, "greeting.get");
     assert.ok(search!.symbol.endsWith(".get"), "label must still be composed from the enclosing symbol");
   });
 });

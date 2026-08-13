@@ -104,7 +104,13 @@ async function composeLabel(
   }
 
   const enclosing = findInnermostSymbol(root, position);
-  return enclosing ? `${enclosing.name}.${word}` : word;
+  if (!enclosing) {
+    return word;
+  }
+  // TypeScript's symbol provider names accessors "(get) foo" / "(set) foo";
+  // the word suffix already carries that information.
+  const name = enclosing.name.replace(/^\((?:get|set|init|add|remove)\)\s+/, "");
+  return `${name}.${word}`;
 }
 
 /**
