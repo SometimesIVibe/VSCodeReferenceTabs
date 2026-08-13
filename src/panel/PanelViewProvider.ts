@@ -74,6 +74,9 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       case "setAllGroups":
         this.store.setAllGroups(message.id, message.collapsed);
         break;
+      case "togglePin":
+        this.store.togglePin(message.id);
+        break;
       case "open":
         void this.openLocation(message);
         break;
@@ -115,6 +118,7 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       kind: search.kind,
       symbol: search.symbol,
       totalCount: search.totalCount,
+      pinned: search.pinned,
     }));
 
     const active = searches.find((search) => search.id === activeId) ?? null;

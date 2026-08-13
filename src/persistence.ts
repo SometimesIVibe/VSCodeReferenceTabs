@@ -87,6 +87,11 @@ export class SearchPersistence implements vscode.Disposable {
         if (typeof parsed.word !== "string") {
           parsed.word = parsed.symbol;
         }
+        // v0.2.2 and earlier files predate `pinned`; default it to `false`
+        // so old persisted searches still load, unpinned.
+        if (typeof parsed.pinned !== "boolean") {
+          parsed.pinned = false;
+        }
         results.push(parsed);
       } catch {
         try {

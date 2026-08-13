@@ -54,6 +54,14 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("referenceTabs.closeUnpinned", () => closeUnpinnedCommand())
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("referenceTabs.togglePin", () => togglePinCommand())
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand("referenceTabs.rerun", () => rerunCommand())
   );
 
@@ -83,17 +91,55 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
 
+    const pinnedCount = store.all.filter((search) => search.pinned).length;
+    const message =
+      pinnedCount > 0
+        ? `Reference Tabs: close all tabs and delete their saved results, including ${pinnedCount} pinned tab${pinnedCount === 1 ? "" : "s"}?`
+        : "Reference Tabs: close all tabs and delete their saved results?";
+
     const yes = "Yes";
-    const choice = await vscode.window.showWarningMessage(
-      "Reference Tabs: close all tabs and delete their saved results?",
-      { modal: false },
-      yes
-    );
+    const choice = await vscode.window.showWarningMessage(message, { modal: false }, yes);
     if (choice !== yes) {
       return;
     }
 
     store.clearAll();
+  }
+
+  async function closeUnpinnedCommand(): Promise<void> {
+    const unpinnedCount = store.all.filter((search) => !search.pinned).length;
+    const pinnedCount = store.all.length - unpinnedCount;
+
+    if (unpinnedCount === 0) {
+      void vscode.window.showInformationMessage(
+        pinnedCount > 0
+          ? "Reference Tabs: no unpinned tabs to close."
+          : "Reference Tabs: no tabs to close."
+      );
+      return;
+    }
+
+    const message =
+      pinnedCount > 0
+        ? `Reference Tabs: close ${unpinnedCount} tab${unpinnedCount === 1 ? "" : "s"}? ${pinnedCount} pinned tab${pinnedCount === 1 ? "" : "s"} ${pinnedCount === 1 ? "is" : "are"} kept.`
+        : "Reference Tabs: close all tabs and delete their saved results?";
+
+    const yes = "Yes";
+    const choice = await vscode.window.showWarningMessage(message, { modal: false }, yes);
+    if (choice !== yes) {
+      return;
+    }
+
+    store.closeUnpinned();
+  }
+
+  async function togglePinCommand(): Promise<void> {
+    const activeId = store.activeId;
+    if (!activeId) {
+      void vscode.window.showInformationMessage("Reference Tabs: no active tab to pin.");
+      return;
+    }
+    store.togglePin(activeId);
   }
 
   async function rerunCommand(): Promise<void> {

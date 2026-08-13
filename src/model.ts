@@ -60,4 +60,11 @@ export interface Search {
   groups: FileGroup[];
   /** Sum of `items.length` across all groups. */
   totalCount: number;
+  /**
+   * Whether this tab is pinned. Pinned tabs sort leftmost, are exempt from
+   * `maxSearches` eviction, and survive "Close All Tabs (Keep Pinned)".
+   * Persisted files from ≤0.2.2 predate this field; `persistence.loadAll`
+   * defaults it to `false` on load (same pattern as `word`).
+   */
+  pinned: boolean;
 }

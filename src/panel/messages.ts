@@ -15,6 +15,7 @@ export interface SearchSummary {
   kind: SearchKind;
   symbol: string;
   totalCount: number;
+  pinned: boolean;
 }
 
 /** ext -> webview: full UI state. `active` is the full `Search` for the active tab only, or `null` if there are no tabs. */
@@ -67,10 +68,17 @@ export interface SetAllGroupsMessage {
   collapsed: boolean;
 }
 
+/** webview -> ext: user clicked a tab's pin/unpin glyph. */
+export interface TogglePinMessage {
+  type: "togglePin";
+  id: string;
+}
+
 export type WebviewToExtensionMessage =
   | ReadyMessage
   | SelectTabMessage
   | CloseTabMessage
   | OpenMessage
   | ToggleGroupMessage
-  | SetAllGroupsMessage;
+  | SetAllGroupsMessage
+  | TogglePinMessage;

@@ -15,6 +15,10 @@ All Implementations" flow with persistent, closable **tabs** in a dedicated
   match still highlighted on top even when it spans a token boundary.
 - Both search commands are bound to left-hand-only shortcuts, so your right
   hand can stay on the mouse.
+- Tabs can be pinned (mirroring VS Code's own editor tabs): pinned tabs sort
+  leftmost, are never evicted by the tab cap, and survive "Close All Tabs
+  (Keep Pinned)". A pinned tab's × is replaced by a pin glyph (click to
+  unpin); middle-click still closes it outright.
 
 <!-- TODO: screenshot of the Reference Tabs panel with two open tabs, one expanded -->
 
@@ -23,7 +27,7 @@ All Implementations" flow with persistent, closable **tabs** in a dedicated
 Install from a packaged `.vsix`:
 
 ```sh
-code --install-extension vscode-reference-tabs-0.2.2.vsix
+code --install-extension vscode-reference-tabs-0.3.0.vsix
 ```
 
 ## Shortcuts
@@ -37,12 +41,14 @@ Both are rebindable via **Preferences: Open Keyboard Shortcuts**.
 
 ## Commands
 
-| Command ID                          | Title                                     | Notes                                  |
-| ------------------------------------ | ------------------------------------------ | --------------------------------------- |
-| `referenceTabs.findReferences`       | Reference Tabs: Find All References        | Also on the editor context menu.        |
-| `referenceTabs.findImplementations`  | Reference Tabs: Find All Implementations   | Also on the editor context menu.        |
-| `referenceTabs.rerun`                | Reference Tabs: Re-run Search              | Panel title-bar button (refresh icon).  |
-| `referenceTabs.clearAll`             | Reference Tabs: Clear All Tabs             | Panel title-bar button (clear-all icon).|
+| Command ID                          | Title                                        | Notes                                     |
+| ------------------------------------ | --------------------------------------------- | ------------------------------------------- |
+| `referenceTabs.findReferences`       | Reference Tabs: Find All References           | Also on the editor context menu.          |
+| `referenceTabs.findImplementations`  | Reference Tabs: Find All Implementations      | Also on the editor context menu.          |
+| `referenceTabs.rerun`                | Reference Tabs: Re-run Search                 | Panel title-bar button (refresh icon).    |
+| `referenceTabs.togglePin`            | Reference Tabs: Pin/Unpin Active Tab          | Command palette only; acts on the active tab. |
+| `referenceTabs.clearAll`             | Reference Tabs: Close All Tabs                | Panel title-bar button (clear-all icon). Closes pinned tabs too. |
+| `referenceTabs.closeUnpinned`        | Reference Tabs: Close All Tabs (Keep Pinned)  | Panel title-bar button (close-all icon). Leaves pinned tabs open. |
 
 ## Settings
 

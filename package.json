@@ -2,7 +2,7 @@
   "name": "vscode-reference-tabs",
   "displayName": "Reference Tabs",
   "description": "Find All References / Find All Implementations results as persistent, closable tabs in a dedicated panel view.",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "publisher": "joachimsejr",
   "license": "MIT",
   "icon": "icon.png",
@@ -55,9 +55,19 @@
       },
       {
         "command": "referenceTabs.clearAll",
-        "title": "Reference Tabs: Clear All Tabs",
-        "shortTitle": "Clear All",
+        "title": "Reference Tabs: Close All Tabs",
+        "shortTitle": "Close All",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "referenceTabs.closeUnpinned",
+        "title": "Reference Tabs: Close All Tabs (Keep Pinned)",
+        "shortTitle": "Close All (Keep Pinned)",
+        "icon": "$(close-all)"
+      },
+      {
+        "command": "referenceTabs.togglePin",
+        "title": "Reference Tabs: Pin/Unpin Active Tab"
       },
       {
         "command": "referenceTabs.rerun",
@@ -77,6 +87,11 @@
           "command": "referenceTabs.clearAll",
           "when": "view == referenceTabs.panel",
           "group": "navigation@2"
+        },
+        {
+          "command": "referenceTabs.closeUnpinned",
+          "when": "view == referenceTabs.panel",
+          "group": "navigation@3"
         }
       ],
       "editor/context": [

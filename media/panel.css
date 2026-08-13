@@ -124,6 +124,41 @@ body {
   background-color: var(--vscode-toolbar-hoverBackground);
 }
 
+.tab-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+.tab-pin:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+/* Unpinned tabs: the pin glyph is a hover-only affordance, matching VS
+   Code's own editor tabs (the × is always visible; a pin appears next to
+   it only on hover/focus). */
+.tab-pin.unpinned {
+  opacity: 0;
+}
+
+.tab:hover .tab-pin.unpinned,
+.tab:focus-within .tab-pin.unpinned {
+  opacity: 1;
+}
+
+/* Pinned tabs: the pin glyph replaces the × entirely and stays visible
+   always — clicking it unpins. Middle-click remains the escape hatch to
+   close a pinned tab outright. */
+.tab.pinned .tab-pin.pinned {
+  opacity: 1;
+}
+
 .toolbar-actions {
   display: flex;
   align-items: center;

@@ -72,6 +72,7 @@ export async function runSearch(
     createdAt: Date.now(),
     groups,
     totalCount,
+    pinned: false,
   };
 }
 

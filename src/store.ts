@@ -69,19 +69,54 @@ export class SearchStore implements vscode.Disposable {
   /**
    * Replaces the search with the same `id` as `search` in place (same tab
    * position), swapping in fresh groups/counts. Used by the rerun command.
-   * No-op if no search with that id exists. Persists and notifies.
+   * `pinned` is always carried over from the existing entry — rerun must
+   * never silently unpin a tab. No-op if no search with that id exists.
+   * Persists and notifies.
    */
   public replace(search: Search): void {
     const index = this.searches.findIndex((s) => s.id === search.id);
     if (index === -1) {
       return;
     }
-    this.searches[index] = search;
-    void this.persistence?.saveSearch(search);
+    const previous = this.searches[index];
+    const replaced: Search = { ...search, pinned: previous.pinned };
+    this.searches[index] = replaced;
+    void this.persistence?.saveSearch(replaced);
     this._onDidChange.fire();
   }
 
-  /** Closes every tab and deletes all persisted search files. */
+  /**
+   * Flips the pinned flag of `id` and re-sorts it per VS Code editor-tab
+   * semantics: pinned tabs occupy the left of the tab bar in their existing
+   * relative order, unpinned follow. Pinning moves the tab to the end of the
+   * pinned block; unpinning moves it to the front of the unpinned block —
+   * both are the same boundary index once the tab is removed from its old
+   * position, so a single insertion point is computed either way.
+   *
+   * Saves immediately (not debounced — pinning is a deliberate action), and
+   * persists the new tab order. No-op if `id` is unknown.
+   */
+  public togglePin(id: string): void {
+    const index = this.searches.findIndex((s) => s.id === id);
+    if (index === -1) {
+      return;
+    }
+    const search = this.searches[index];
+    search.pinned = !search.pinned;
+    this.searches.splice(index, 1);
+
+    let insertAt = 0;
+    while (insertAt < this.searches.length && this.searches[insertAt].pinned) {
+      insertAt++;
+    }
+    this.searches.splice(insertAt, 0, search);
+
+    void this.persistence?.saveSearch(search);
+    this.persistTabState();
+    this._onDidChange.fire();
+  }
+
+  /** Closes every tab and deletes all persisted search files, pinned included. */
   public clearAll(): void {
     if (this.searches.length === 0) {
       return;
@@ -92,6 +127,38 @@ export class SearchStore implements vscode.Disposable {
 
     for (const id of ids) {
       void this.persistence?.deleteSearch(id);
+    }
+
+    this.persistTabState();
+    this._onDidChange.fire();
+  }
+
+  /**
+   * Closes every *unpinned* tab (deletes their persisted files) and leaves
+   * pinned tabs untouched. If the active tab was among the closed ones,
+   * activates the first remaining (necessarily pinned) tab. No-op if there
+   * are no unpinned tabs.
+   */
+  public closeUnpinned(): void {
+    const idsToClose = this.searches.filter((s) => !s.pinned).map((s) => s.id);
+    if (idsToClose.length === 0) {
+      return;
+    }
+    const closingActive =
+      this.activeSearchId !== undefined && idsToClose.includes(this.activeSearchId);
+
+    for (let i = this.searches.length - 1; i >= 0; i--) {
+      if (!this.searches[i].pinned) {
+        this.searches.splice(i, 1);
+      }
+    }
+
+    for (const id of idsToClose) {
+      void this.persistence?.deleteSearch(id);
+    }
+
+    if (closingActive) {
+      this.activeSearchId = this.searches[0]?.id;
     }
 
     this.persistTabState();
@@ -198,10 +265,15 @@ export class SearchStore implements vscode.Disposable {
     this._onDidChange.dispose();
   }
 
-  /** Evicts oldest searches (by `createdAt`) until the count is within `maxSearches`. */
+  /**
+   * Evicts oldest *unpinned* searches (by `createdAt`) until the unpinned
+   * count is within `maxSearches`. Pinned searches never count toward the
+   * cap and are never evicted — if every search is pinned, the cap may be
+   * exceeded rather than evicting a pinned tab or blocking a new search.
+   */
   private evictOverflow(): void {
-    while (this.searches.length > this.maxSearches) {
-      const oldest = this.oldestSearch();
+    while (this.unpinnedCount() > this.maxSearches) {
+      const oldest = this.oldestUnpinnedSearch();
       if (!oldest) {
         break;
       }
@@ -215,8 +287,15 @@ export class SearchStore implements vscode.Disposable {
     }
   }
 
-  private oldestSearch(): Search | undefined {
+  private unpinnedCount(): number {
+    return this.searches.reduce((count, search) => (search.pinned ? count : count + 1), 0);
+  }
+
+  private oldestUnpinnedSearch(): Search | undefined {
     return this.searches.reduce<Search | undefined>((oldest, search) => {
+      if (search.pinned) {
+        return oldest;
+      }
       if (!oldest || search.createdAt < oldest.createdAt) {
         return search;
       }
