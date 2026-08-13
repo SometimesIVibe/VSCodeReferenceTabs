@@ -138,12 +138,18 @@
   "scripts": {
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
-    "package": "vsce package"
+    "package": "vsce package",
+    "pretest": "tsc -p tsconfig.test.json",
+    "test": "npm run pretest && vscode-test"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.23.0",
+    "mocha": "^11.8.0",
     "typescript": "^5.5.0"
   },
   "dependencies": {

@@ -2,3 +2,5 @@ node_modules/
 dist/
 media/hljs.js
 *.vsix
+out-test/
+.vscode-test/
