@@ -77,6 +77,15 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       case "togglePin":
         this.store.togglePin(message.id);
         break;
+      case "closeOthers":
+        this.store.closeOthers(message.id);
+        break;
+      case "closeAll":
+        void vscode.commands.executeCommand("referenceTabs.clearAll");
+        break;
+      case "closeAllKeepPinned":
+        void vscode.commands.executeCommand("referenceTabs.closeUnpinned");
+        break;
       case "open":
         void this.openLocation(message);
         break;
@@ -162,7 +171,7 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
 
     const csp = [
       "default-src 'none'",
-      `style-src ${webview.cspSource}`,
+      `style-src ${webview.cspSource} 'nonce-${nonce}'`,
       `script-src 'nonce-${nonce}'`,
     ].join("; ");
 
@@ -173,6 +182,12 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
   <meta http-equiv="Content-Security-Policy" content="${csp}" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="${cssUri}" />
+  <!-- CSP forbids inline style="" attributes (no 'unsafe-inline'); the
+       context menu's cursor-position left/top are instead written into this
+       nonce'd stylesheet's text at runtime (media/panel.js), which is
+       CSP-safe since the nonce is only checked when the element is
+       inserted, not on later text mutations. -->
+  <style nonce="${nonce}" id="context-menu-position-style"></style>
   <title>Reference Tabs</title>
 </head>
 <body>

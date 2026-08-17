@@ -74,6 +74,22 @@ export interface TogglePinMessage {
   id: string;
 }
 
+/** webview -> ext: context-menu "Close Others" — closes every other unpinned tab. */
+export interface CloseOthersMessage {
+  type: "closeOthers";
+  id: string;
+}
+
+/** webview -> ext: context-menu "Close All" — runs the `referenceTabs.clearAll` command (keeps its confirmation flow). */
+export interface CloseAllMessage {
+  type: "closeAll";
+}
+
+/** webview -> ext: context-menu "Close All (Keep Pinned)" — runs the `referenceTabs.closeUnpinned` command (keeps its confirmation flow). */
+export interface CloseAllKeepPinnedMessage {
+  type: "closeAllKeepPinned";
+}
+
 export type WebviewToExtensionMessage =
   | ReadyMessage
   | SelectTabMessage
@@ -81,4 +97,7 @@ export type WebviewToExtensionMessage =
   | OpenMessage
   | ToggleGroupMessage
   | SetAllGroupsMessage
-  | TogglePinMessage;
+  | TogglePinMessage
+  | CloseOthersMessage
+  | CloseAllMessage
+  | CloseAllKeepPinnedMessage;

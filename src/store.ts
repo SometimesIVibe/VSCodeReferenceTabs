@@ -192,6 +192,41 @@ export class SearchStore implements vscode.Disposable {
   }
 
   /**
+   * Closes every OTHER unpinned tab, deleting their persisted files. Pinned
+   * tabs and the target `id` itself always survive (VS Code editor-tab
+   * "Close Others" semantics), regardless of the target's own pinned state.
+   * The target becomes the active tab. No confirmation (matches VS Code).
+   * No-op if `id` is unknown or there is nothing else to close.
+   */
+  public closeOthers(id: string): void {
+    if (!this.searches.some((s) => s.id === id)) {
+      return;
+    }
+    const idsToClose = this.searches
+      .filter((s) => s.id !== id && !s.pinned)
+      .map((s) => s.id);
+    if (idsToClose.length === 0) {
+      return;
+    }
+
+    for (let i = this.searches.length - 1; i >= 0; i--) {
+      const search = this.searches[i];
+      if (search.id !== id && !search.pinned) {
+        this.searches.splice(i, 1);
+      }
+    }
+
+    for (const closedId of idsToClose) {
+      void this.persistence?.deleteSearch(closedId);
+    }
+
+    this.activeSearchId = id;
+
+    this.persistTabState();
+    this._onDidChange.fire();
+  }
+
+  /**
    * Removes a search (closes its tab). If it was the active tab, activates
    * a neighbor (preferring the one that took its place, falling back to the
    * new last tab). If no searches remain, `activeId` becomes `undefined`.

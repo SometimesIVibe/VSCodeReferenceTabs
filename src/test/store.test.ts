@@ -342,6 +342,72 @@ suite("SearchStore", () => {
     });
   });
 
+  suite("closeOthers", () => {
+    test("spares pinned tabs and the target, closes every other unpinned tab, deletes the right files, activates the target", () => {
+      store.add(makeSearch("p", { pinned: true }));
+      store.add(makeSearch("target"));
+      store.add(makeSearch("u1"));
+      store.add(makeSearch("u2"));
+      store.setActive("u1");
+
+      store.closeOthers("target");
+
+      assert.deepStrictEqual(store.all.map((s) => s.id), ["p", "target"]);
+      assert.deepStrictEqual(persistence.deletedIds.sort(), ["u1", "u2"]);
+      assert.strictEqual(store.activeId, "target");
+    });
+
+    test("leaves a pinned target's own pinned state untouched and still activates it", () => {
+      store.add(makeSearch("target", { pinned: true }));
+      store.add(makeSearch("u1"));
+      store.add(makeSearch("u2"));
+      store.setActive("u1");
+
+      store.closeOthers("target");
+
+      assert.deepStrictEqual(store.all.map((s) => s.id), ["target"]);
+      assert.strictEqual(store.all[0].pinned, true);
+      assert.strictEqual(store.activeId, "target");
+      assert.deepStrictEqual(persistence.deletedIds.sort(), ["u1", "u2"]);
+    });
+
+    test("is a no-op on a single-tab store", () => {
+      store.add(makeSearch("a"));
+      persistence.deletedIds.length = 0;
+
+      store.closeOthers("a");
+
+      assert.deepStrictEqual(store.all.map((s) => s.id), ["a"]);
+      assert.strictEqual(store.activeId, "a");
+      assert.deepStrictEqual(persistence.deletedIds, []);
+    });
+
+    test("is a no-op when the only other tabs are already pinned", () => {
+      store.add(makeSearch("p1", { pinned: true }));
+      store.add(makeSearch("p2", { pinned: true }));
+      store.add(makeSearch("target"));
+      store.setActive("p1");
+
+      store.closeOthers("target");
+
+      // Nothing was closeable (both others are pinned), so activeId is left
+      // alone rather than force-switching to the target.
+      assert.deepStrictEqual(store.all.map((s) => s.id), ["p1", "p2", "target"]);
+      assert.strictEqual(store.activeId, "p1");
+      assert.deepStrictEqual(persistence.deletedIds, []);
+    });
+
+    test("is a no-op for an unknown id", () => {
+      store.add(makeSearch("a"));
+      store.add(makeSearch("b"));
+
+      store.closeOthers("does-not-exist");
+
+      assert.deepStrictEqual(store.all.map((s) => s.id), ["a", "b"]);
+      assert.deepStrictEqual(persistence.deletedIds, []);
+    });
+  });
+
   suite("clearAll", () => {
     test("empties the store, including pinned tabs, and deletes every persisted file", () => {
       store.add(makeSearch("p", { pinned: true }));
