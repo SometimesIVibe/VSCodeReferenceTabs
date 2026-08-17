@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
+import { EnclosingKind, SearchLabelBuilder } from "./labels";
 import { FileGroup, Search, SearchKind, SearchResultItem } from "./model";
 
 /** Preview lines are trimmed then capped to this many characters. */
@@ -11,6 +12,9 @@ const MAX_LINE_LENGTH = 200;
  * positives just produce a slightly-too-rich label, never a wrong search.
  */
 const ACCESSOR_WORDS = new Set(["get", "set", "init", "add", "remove"]);
+
+/** Shared instance: {@link SearchLabelBuilder} is stateless and pure. */
+const labelBuilder = new SearchLabelBuilder();
 
 interface NormalizedLocation {
   uri: vscode.Uri;
@@ -38,7 +42,7 @@ export async function runSearch(
     return undefined;
   }
   const word = document.getText(wordRange);
-  const symbol = await composeLabel(document, wordRange.start, word);
+  const symbol = await composeLabel(document, wordRange, word);
 
   const command =
     kind === "references"
@@ -77,22 +81,20 @@ export async function runSearch(
 }
 
 /**
- * Composes the display label for the cursor word: for an accessor keyword
- * (`get`/`set`/`init`/`add`/`remove`), prefixes it with the name of the
- * innermost enclosing document symbol (e.g. `Name.get`); otherwise returns
- * `word` unchanged. Falls back to `word` whenever the symbol provider
- * returns nothing usable (no provider, empty result, or a `SymbolInformation[]`
- * result — those lack `.children`/nested ranges, so descent degrades to "no match").
+ * Composes the display label for the cursor word by adapting live editor /
+ * document-symbol data into plain {@link LabelInput} and delegating the
+ * actual rules to {@link SearchLabelBuilder} (`src/labels.ts`, dependency-free
+ * and unit-tested on its own). Always fetches document symbols (cheap; the
+ * language server caches them) so both the accessor-label rule and the
+ * constructor-declaration rule have an `enclosing` symbol to work with, but
+ * tolerates the provider being absent/failing/returning `SymbolInformation[]`
+ * (no `.children`/nested ranges) by falling back to `enclosing: undefined`.
  */
 async function composeLabel(
   document: vscode.TextDocument,
-  position: vscode.Position,
+  wordRange: vscode.Range,
   word: string
 ): Promise<string> {
-  if (!ACCESSOR_WORDS.has(word)) {
-    return word;
-  }
-
   let root: vscode.DocumentSymbol[] | undefined;
   try {
     root = await vscode.commands.executeCommand<vscode.DocumentSymbol[] | undefined>(
@@ -100,17 +102,31 @@ async function composeLabel(
       document.uri
     );
   } catch {
-    return word;
+    root = undefined;
   }
 
-  const enclosing = findInnermostSymbol(root, position);
-  if (!enclosing) {
-    return word;
+  const innermost = findInnermostSymbol(root, wordRange.start);
+  const enclosing = innermost
+    ? { name: innermost.name, kind: mapSymbolKind(innermost.kind) }
+    : undefined;
+
+  const lineTextBeforeWord = document
+    .lineAt(wordRange.start.line)
+    .text.slice(0, wordRange.start.character);
+
+  return labelBuilder.build({ word, lineTextBeforeWord, enclosing });
+}
+
+/** Collapses `vscode.SymbolKind` down to the small string union the pure {@link SearchLabelBuilder} understands. */
+function mapSymbolKind(kind: vscode.SymbolKind): EnclosingKind {
+  switch (kind) {
+    case vscode.SymbolKind.Constructor:
+      return "constructor";
+    case vscode.SymbolKind.Property:
+      return "property";
+    default:
+      return "other";
   }
-  // TypeScript's symbol provider names accessors "(get) foo" / "(set) foo";
-  // the word suffix already carries that information.
-  const name = enclosing.name.replace(/^\((?:get|set|init|add|remove)\)\s+/, "");
-  return `${name}.${word}`;
 }
 
 /**

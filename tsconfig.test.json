@@ -14,6 +14,13 @@
     "sourceMap": true,
     "types": ["node", "mocha", "vscode"]
   },
-  "include": ["src/test/**/*.ts", "src/store.ts", "src/persistence.ts", "src/search.ts", "src/model.ts"],
+  "include": [
+    "src/test/**/*.ts",
+    "src/store.ts",
+    "src/persistence.ts",
+    "src/search.ts",
+    "src/model.ts",
+    "src/labels.ts"
+  ],
   "exclude": ["node_modules", "dist", "out", "out-test"]
 }
