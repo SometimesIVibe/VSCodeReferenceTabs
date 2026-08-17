@@ -30,6 +30,14 @@ export function shout(text: string): string {
   return text.toUpperCase();
 }
 
+// Plain type reference to the class (not a `new` usage) — gives
+// search.test.ts a location where `EnglishGreeter`'s definition resolves the
+// same way as `new EnglishGreeter()` below, but the display label differs
+// ("EnglishGreeter" vs "EnglishGreeter()"), so their dedup keys must differ.
+function describeGreeter(g: EnglishGreeter): string {
+  return g.greet("fixture");
+}
+
 const greeter: Greeter = new EnglishGreeter();
 console.log(shout(greeter.greet("World")));
 console.log(shout(greeter.greet("VS Code")));

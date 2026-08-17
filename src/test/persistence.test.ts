@@ -22,6 +22,7 @@ function makeSearch(id: string, overrides: Partial<Search> = {}): Search {
     groups: [],
     totalCount: 0,
     pinned: false,
+    key: `key-${id}`,
     ...overrides,
   };
 }
@@ -96,6 +97,43 @@ suite("SearchPersistence", () => {
     assert.strictEqual(loaded.length, 1);
     assert.strictEqual(loaded[0].word, "Bar", "word should default to symbol");
     assert.strictEqual(loaded[0].pinned, false, "pinned should default to false");
+    assert.strictEqual(loaded[0].key, "legacy:legacy1", "key should default to a legacy value derived from id");
+  });
+
+  test("legacy files without key load with unique legacy keys", async () => {
+    fs.mkdirSync(searchesDir(), { recursive: true });
+    const legacyBase = {
+      kind: "references",
+      symbol: "Bar",
+      word: "Bar",
+      originUri: "file:///fixture.ts",
+      originLine: 3,
+      createdAt: 123,
+      groups: [],
+      totalCount: 0,
+      pinned: false,
+      // no `key` — pre-v0.4.0 shape.
+    };
+    fs.writeFileSync(
+      path.join(searchesDir(), "legacyA.json"),
+      JSON.stringify({ ...legacyBase, id: "legacyA" })
+    );
+    fs.writeFileSync(
+      path.join(searchesDir(), "legacyB.json"),
+      JSON.stringify({ ...legacyBase, id: "legacyB" })
+    );
+
+    const loaded = await persistence.loadAll();
+
+    assert.strictEqual(loaded.length, 2);
+    const byId = new Map(loaded.map((s) => [s.id, s]));
+    assert.strictEqual(byId.get("legacyA")!.key, "legacy:legacyA");
+    assert.strictEqual(byId.get("legacyB")!.key, "legacy:legacyB");
+    assert.notStrictEqual(
+      byId.get("legacyA")!.key,
+      byId.get("legacyB")!.key,
+      "legacy keys must be unique per id, even for otherwise-identical legacy searches"
+    );
   });
 
   test("deleteSearch removes the file", async () => {

@@ -74,6 +74,9 @@ function makeSearch(id: string, overrides: Partial<Search> = {}): Search {
     groups: [],
     totalCount: 0,
     pinned: false,
+    // Unique per default (derived from `id`) so existing tests, which never
+    // intend to dedup, stay unaffected; dedup tests below override it.
+    key: `key-${id}`,
     ...overrides,
   };
 }
@@ -160,6 +163,53 @@ suite("SearchStore", () => {
       store.add(makeSearch("a"));
       store.close("does-not-exist");
       assert.strictEqual(store.all.length, 1);
+    });
+  });
+
+  suite("add dedup by key", () => {
+    test("duplicate key updates the existing tab in place: count unchanged, id/pinned/position kept, fresh fields win, tab activated", () => {
+      store.add(makeSearch("a", { key: "shared" }));
+      store.add(makeSearch("b"));
+      store.add(makeSearch("c"));
+      store.togglePin("a");
+      // order: a (pinned), b, c
+      store.setActive("c");
+
+      const rerun = makeSearch("fresh-guid", {
+        key: "shared",
+        symbol: "renamed",
+        totalCount: 9,
+        createdAt: 999,
+        pinned: false, // must be ignored — pinned is carried over from the existing entry
+      });
+      store.add(rerun);
+
+      assert.strictEqual(store.all.length, 3, "count must be unchanged on dedup");
+      assert.deepStrictEqual(
+        store.all.map((s) => s.id),
+        ["a", "b", "c"],
+        "tab position must be unchanged"
+      );
+
+      const updated = store.all[0];
+      assert.strictEqual(updated.id, "a", "the OLD id must be kept, not the incoming GUID");
+      assert.strictEqual(updated.pinned, true, "pinned must be preserved from the existing entry");
+      assert.strictEqual(updated.symbol, "renamed", "fresh fields from the incoming search must win");
+      assert.strictEqual(updated.totalCount, 9);
+      assert.strictEqual(updated.createdAt, 999);
+      assert.strictEqual(store.activeId, "a", "the deduped tab must become active");
+
+      // Saved under the kept id — no new file, nothing deleted.
+      assert.ok(persistence.saved.some((s) => s.id === "a" && s.symbol === "renamed"));
+      assert.deepStrictEqual(persistence.deletedIds, []);
+    });
+
+    test("distinct keys never dedup: each add produces its own tab", () => {
+      store.add(makeSearch("a", { key: "key-a" }));
+      store.add(makeSearch("b", { key: "key-b" }));
+
+      assert.deepStrictEqual(store.all.map((s) => s.id), ["a", "b"]);
+      assert.strictEqual(store.all.length, 2);
     });
   });
 

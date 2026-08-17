@@ -54,8 +54,34 @@ export class SearchStore implements vscode.Disposable {
     return this.activeSearchId;
   }
 
-  /** Adds a new search and makes it the active one. Persists immediately and evicts the oldest search past the configured max (see {@link setMaxSearches}). */
+  /**
+   * Adds a new search and makes it the active one. Persists immediately and
+   * evicts the oldest search past the configured max (see
+   * {@link setMaxSearches}).
+   *
+   * Dedup: if an existing search already has the same `key` (deterministic
+   * identity of the search *target*, distinct from the fresh GUID `id`
+   * every `runSearch` mints — see `model.ts`), that entry is updated in
+   * place instead of opening a new tab: its `id`, `pinned` flag, and tab
+   * position are kept, while `search`'s fresh `groups`/`totalCount`/
+   * `createdAt`/origin fields win. The merged entry is saved under the KEPT
+   * id (nothing is deleted, no new file is written) and becomes active. No
+   * eviction check runs in this branch — the tab count didn't grow.
+   */
   public add(search: Search): void {
+    const existingIndex = this.searches.findIndex((s) => s.key === search.key);
+    if (existingIndex !== -1) {
+      const existing = this.searches[existingIndex];
+      const merged: Search = { ...search, id: existing.id, pinned: existing.pinned };
+      this.searches[existingIndex] = merged;
+      this.activeSearchId = merged.id;
+
+      void this.persistence?.saveSearch(merged);
+      this.persistTabState();
+      this._onDidChange.fire();
+      return;
+    }
+
     this.searches.push(search);
     this.activeSearchId = search.id;
 

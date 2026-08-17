@@ -19,6 +19,12 @@ All Implementations" flow with persistent, closable **tabs** in a dedicated
   leftmost, are never evicted by the tab cap, and survive "Close All Tabs
   (Keep Pinned)". A pinned tab's × is replaced by a pin glyph (click to
   unpin); middle-click still closes it outright.
+- Re-running a search for a symbol that already has an open tab reuses that
+  tab instead of opening a duplicate: it's focused and its results reload in
+  place, with its pinned state and tab position preserved. Identity is based
+  on the search target (its resolved definition, kind, and label), not on
+  which file/line you searched from — the same symbol found via two
+  different usage sites still lands on one tab.
 
 <!-- TODO: screenshot of the Reference Tabs panel with two open tabs, one expanded -->
 
@@ -27,7 +33,7 @@ All Implementations" flow with persistent, closable **tabs** in a dedicated
 Install from a packaged `.vsix`:
 
 ```sh
-code --install-extension vscode-reference-tabs-0.3.1.vsix
+code --install-extension vscode-reference-tabs-0.4.0.vsix
 ```
 
 ## Shortcuts

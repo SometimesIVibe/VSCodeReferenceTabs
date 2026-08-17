@@ -92,6 +92,13 @@ export class SearchPersistence implements vscode.Disposable {
         if (typeof parsed.pinned !== "boolean") {
           parsed.pinned = false;
         }
+        // v0.3.0 and earlier files predate `key` (dedup identity); default
+        // it to a value derived from `id`, which is already unique, so a
+        // legacy tab never falsely dedups against another legacy tab or a
+        // fresh search.
+        if (typeof parsed.key !== "string") {
+          parsed.key = "legacy:" + parsed.id;
+        }
         results.push(parsed);
       } catch {
         try {

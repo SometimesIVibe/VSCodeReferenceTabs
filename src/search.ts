@@ -43,6 +43,7 @@ export async function runSearch(
   }
   const word = document.getText(wordRange);
   const symbol = await composeLabel(document, wordRange, word);
+  const key = await computeKey(kind, document, position, symbol, word);
 
   const command =
     kind === "references"
@@ -77,7 +78,54 @@ export async function runSearch(
     groups,
     totalCount,
     pinned: false,
+    key,
   };
+}
+
+/**
+ * Computes the deterministic dedup key for a search target: resolves the
+ * primary definition of the symbol under the cursor via
+ * `vscode.executeDefinitionProvider` and combines it with `kind` and the
+ * already-composed display `label` — `${kind}|${defUri}|${line}:${char}|${label}`.
+ * The label is part of the key (not just the definition location) so that,
+ * e.g., a `new Foo()` constructor call and a plain `Foo` type reference never
+ * collide even when TypeScript resolves both to the same class declaration
+ * (see the search.test.ts case for this exact scenario), and so C# records
+ * (primary constructor === record declaration) separate the two naturally.
+ *
+ * Falls back to `${kind}|fallback|${originUri}|${originLine}|${word}` when
+ * the provider is missing, returns no results, or throws — this still
+ * uniquely identifies the origin of the search, just not the target symbol's
+ * canonical definition.
+ */
+async function computeKey(
+  kind: SearchKind,
+  document: vscode.TextDocument,
+  position: vscode.Position,
+  label: string,
+  word: string
+): Promise<string> {
+  const originUri = document.uri.toString();
+  const originLine = position.line;
+  const fallback = `${kind}|fallback|${originUri}|${originLine}|${word}`;
+
+  try {
+    const raw = await vscode.commands.executeCommand<
+      (vscode.Location | vscode.LocationLink)[] | undefined
+    >("vscode.executeDefinitionProvider", document.uri, position);
+
+    const normalized = normalizeLocations(raw ?? []);
+    const primary = normalized[0];
+    if (!primary) {
+      return fallback;
+    }
+
+    const defUri = primary.uri.toString();
+    const { line, character } = primary.range.start;
+    return `${kind}|${defUri}|${line}:${character}|${label}`;
+  } catch {
+    return fallback;
+  }
 }
 
 /**

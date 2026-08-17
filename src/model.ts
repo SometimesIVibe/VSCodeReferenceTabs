@@ -67,4 +67,17 @@ export interface Search {
    * defaults it to `false` on load (same pattern as `word`).
    */
   pinned: boolean;
+  /**
+   * Deterministic identity for dedup, distinct from `id` (a fresh GUID every
+   * run). Computed in `runSearch` from the resolved definition location of
+   * the search target: `${kind}|${defUri}|${line}:${char}|${symbol}` (falls
+   * back to `${kind}|fallback|${originUri}|${originLine}|${word}` when no
+   * definition is found). `SearchStore.add` uses it to reuse an existing tab
+   * — same key in, same tab reloaded in place — instead of opening a
+   * duplicate. `rerunSearch` keeps the original search's `key`. Persisted
+   * files from ≤0.3.0 predate this field; `persistence.loadAll` defaults it
+   * to `"legacy:" + id` (unique per file, so old tabs never falsely dedup
+   * against each other or a fresh search).
+   */
+  key: string;
 }

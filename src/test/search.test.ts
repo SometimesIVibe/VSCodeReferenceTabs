@@ -32,6 +32,33 @@ function positionOfFirst(document: vscode.TextDocument, token: string): vscode.P
   return document.positionAt(index);
 }
 
+/**
+ * Position of the first occurrence of `token` at or after the first
+ * occurrence of `containing`. Used to disambiguate a token (e.g.
+ * `EnglishGreeter`) that appears multiple times in the fixture by anchoring
+ * to distinctive surrounding text, so the test stays robust to unrelated
+ * fixture edits (rather than depending on a raw occurrence index).
+ */
+function positionOfTokenNear(
+  document: vscode.TextDocument,
+  containing: string,
+  token: string
+): vscode.Position {
+  const text = document.getText();
+  const anchorIndex = text.indexOf(containing);
+  assert.notStrictEqual(anchorIndex, -1, `expected to find "${containing}" in the fixture`);
+  const tokenIndex = text.indexOf(token, anchorIndex);
+  assert.notStrictEqual(tokenIndex, -1, `expected to find "${token}" at or after "${containing}"`);
+  return document.positionAt(tokenIndex);
+}
+
+/** Splits a `Search.key` (`${kind}|${defUri}|${line}:${char}|${label}`) into its definition-location component and its label component. */
+function splitKeyLabel(key: string): { locationKey: string; label: string } {
+  const parts = key.split("|");
+  const label = parts.pop() ?? "";
+  return { locationKey: parts.join("|"), label };
+}
+
 suite("search (end-to-end against the fixture workspace)", () => {
   let document: vscode.TextDocument;
   let editor: vscode.TextEditor;
@@ -101,5 +128,64 @@ suite("search (end-to-end against the fixture workspace)", () => {
     // `.get` suffix already carries it.
     assert.strictEqual(search!.symbol, "greeting.get");
     assert.ok(search!.symbol.endsWith(".get"), "label must still be composed from the enclosing symbol");
+  });
+
+  test("dedup key: the same symbol searched from two different usage sites produces an equal key", async function () {
+    this.timeout(15000);
+
+    const site1 = positionOfTokenNear(document, 'shout(greeter.greet("World"', "shout");
+    editor.selection = new vscode.Selection(site1, site1);
+    const search1 = await runSearch("references", editor);
+    assert.ok(search1, "expected a search result for the first call site");
+
+    const site2 = positionOfTokenNear(document, 'shout(greeter.greet("VS Code"', "shout");
+    editor.selection = new vscode.Selection(site2, site2);
+    const search2 = await runSearch("references", editor);
+    assert.ok(search2, "expected a search result for the second call site");
+
+    assert.strictEqual(
+      search1!.key,
+      search2!.key,
+      "the same symbol from two different usage sites must produce the same dedup key"
+    );
+  });
+
+  test("dedup key: `new EnglishGreeter()` and a plain `EnglishGreeter` type reference resolve to the same definition but produce different keys (label disambiguates)", async function () {
+    this.timeout(15000);
+
+    const typeRefPos = positionOfTokenNear(document, "describeGreeter(g:", "EnglishGreeter");
+    editor.selection = new vscode.Selection(typeRefPos, typeRefPos);
+    const typeRefSearch = await runSearch("references", editor);
+    assert.ok(typeRefSearch, "expected a search result for the type-reference site");
+
+    // Anchored on "= new EnglishGreeter" (not just "new EnglishGreeter") so
+    // this doesn't accidentally match the literal "new EnglishGreeter()"
+    // that appears inside this file's own explanatory comment above.
+    const newExprPos = positionOfTokenNear(document, "= new EnglishGreeter", "EnglishGreeter");
+    editor.selection = new vscode.Selection(newExprPos, newExprPos);
+    const newExprSearch = await runSearch("references", editor);
+    assert.ok(newExprSearch, "expected a search result for the `new` usage site");
+
+    assert.notStrictEqual(
+      typeRefSearch!.key,
+      newExprSearch!.key,
+      "a plain type reference and a constructor-call site must not dedup to the same tab"
+    );
+
+    // TS's "go to definition" resolves both `EnglishGreeter` usages to the
+    // same class declaration (no explicit constructor to distinguish them),
+    // so the definition-location component of the key is identical; only
+    // the label differs ("EnglishGreeter" vs "EnglishGreeter()"), and that
+    // is exactly what must keep the keys apart.
+    const typeRef = splitKeyLabel(typeRefSearch!.key);
+    const newExpr = splitKeyLabel(newExprSearch!.key);
+
+    assert.strictEqual(
+      typeRef.locationKey,
+      newExpr.locationKey,
+      "both usages must resolve to the same definition location"
+    );
+    assert.strictEqual(typeRef.label, "EnglishGreeter");
+    assert.strictEqual(newExpr.label, "EnglishGreeter()");
   });
 });
