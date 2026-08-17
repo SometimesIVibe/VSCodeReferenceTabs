@@ -130,6 +130,21 @@ suite("search (end-to-end against the fixture workspace)", () => {
     assert.ok(search!.symbol.endsWith(".get"), "label must still be composed from the enclosing symbol");
   });
 
+  test("accessor search: cursor on the `set` keyword labels the tab Property.set", async function () {
+    this.timeout(15000);
+
+    const setIndex = document.getText().indexOf("set greeting");
+    assert.notStrictEqual(setIndex, -1, "expected to find the `set greeting` accessor in the fixture");
+    const position = document.positionAt(setIndex);
+    editor.selection = new vscode.Selection(position, position);
+
+    const search = await runSearch("references", editor);
+
+    assert.ok(search, "expected a search result");
+    assert.strictEqual(search!.word, "set");
+    assert.strictEqual(search!.symbol, "greeting.set");
+  });
+
   test("dedup key: the same symbol searched from two different usage sites produces an equal key", async function () {
     this.timeout(15000);
 

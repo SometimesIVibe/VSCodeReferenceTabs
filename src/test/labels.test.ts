@@ -39,6 +39,22 @@ suite("SearchLabelBuilder", () => {
     assert.strictEqual(label, "greeting.get");
   });
 
+  test("`set` accessor mirrors the `get` behavior, including `(set) ` prefix stripping", () => {
+    const plain = builder.build({
+      word: "set",
+      lineTextBeforeWord: "  ",
+      enclosing: { name: "greeting", kind: "property" },
+    });
+    const prefixed = builder.build({
+      word: "set",
+      lineTextBeforeWord: "  ",
+      enclosing: { name: "(set) greeting", kind: "property" },
+    });
+
+    assert.strictEqual(plain, "greeting.set");
+    assert.strictEqual(prefixed, "greeting.set");
+  });
+
   test("accessor word with no enclosing symbol falls back to the plain word", () => {
     const label = builder.build({
       word: "get",
