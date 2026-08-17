@@ -81,24 +81,6 @@ export class SearchPersistence implements vscode.Disposable {
         if (!isSearch(parsed)) {
           throw new Error("not a Search");
         }
-        // v0.2.0 files predate `word`; default it to `symbol` so old
-        // persisted searches still load (and rerun still works, since
-        // symbol === word for every search that predates accessor labels).
-        if (typeof parsed.word !== "string") {
-          parsed.word = parsed.symbol;
-        }
-        // v0.2.2 and earlier files predate `pinned`; default it to `false`
-        // so old persisted searches still load, unpinned.
-        if (typeof parsed.pinned !== "boolean") {
-          parsed.pinned = false;
-        }
-        // v0.3.0 and earlier files predate `key` (dedup identity); default
-        // it to a value derived from `id`, which is already unique, so a
-        // legacy tab never falsely dedups against another legacy tab or a
-        // fresh search.
-        if (typeof parsed.key !== "string") {
-          parsed.key = "legacy:" + parsed.id;
-        }
         results.push(parsed);
       } catch {
         try {
@@ -158,6 +140,9 @@ function isSearch(value: unknown): value is Search {
     typeof candidate.id === "string" &&
     (candidate.kind === "references" || candidate.kind === "implementations") &&
     typeof candidate.symbol === "string" &&
+    typeof candidate.word === "string" &&
+    typeof candidate.key === "string" &&
+    typeof candidate.pinned === "boolean" &&
     typeof candidate.originUri === "string" &&
     typeof candidate.originLine === "number" &&
     typeof candidate.createdAt === "number" &&
