@@ -91,18 +91,6 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
 
-    const pinnedCount = store.all.filter((search) => search.pinned).length;
-    const message =
-      pinnedCount > 0
-        ? `Reference Tabs: close all tabs and delete their saved results, including ${pinnedCount} pinned tab${pinnedCount === 1 ? "" : "s"}?`
-        : "Reference Tabs: close all tabs and delete their saved results?";
-
-    const yes = "Yes";
-    const choice = await vscode.window.showWarningMessage(message, { modal: false }, yes);
-    if (choice !== yes) {
-      return;
-    }
-
     store.clearAll();
   }
 
@@ -116,17 +104,6 @@ export function activate(context: vscode.ExtensionContext): void {
           ? "Reference Tabs: no unpinned tabs to close."
           : "Reference Tabs: no tabs to close."
       );
-      return;
-    }
-
-    const message =
-      pinnedCount > 0
-        ? `Reference Tabs: close ${unpinnedCount} tab${unpinnedCount === 1 ? "" : "s"}? ${pinnedCount} pinned tab${pinnedCount === 1 ? "" : "s"} ${pinnedCount === 1 ? "is" : "are"} kept.`
-        : "Reference Tabs: close all tabs and delete their saved results?";
-
-    const yes = "Yes";
-    const choice = await vscode.window.showWarningMessage(message, { modal: false }, yes);
-    if (choice !== yes) {
       return;
     }
 
