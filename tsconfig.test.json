@@ -20,7 +20,8 @@
     "src/persistence.ts",
     "src/search.ts",
     "src/model.ts",
-    "src/labels.ts"
+    "src/labels.ts",
+    "src/testProject.ts"
   ],
   "exclude": ["node_modules", "dist", "out", "out-test"]
 }

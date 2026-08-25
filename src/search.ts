@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
 import { EnclosingKind, SearchLabelBuilder } from "./labels";
+import { TestProjectClassifier } from "./testProject";
 import { FileGroup, Search, SearchKind, SearchResultItem } from "./model";
 
 /** Preview lines are trimmed then capped to this many characters. */
@@ -315,6 +316,7 @@ async function buildGroups(locations: NormalizedLocation[]): Promise<FileGroup[]
     }
   }
 
+  const classifier = new TestProjectClassifier();
   const groups: FileGroup[] = [];
   for (const { uri, ranges } of byUri.values()) {
     ranges.sort((a, b) => a.start.line - b.start.line || a.start.character - b.start.character);
@@ -336,15 +338,22 @@ async function buildGroups(locations: NormalizedLocation[]): Promise<FileGroup[]
 
     const items: SearchResultItem[] = ranges.map((range) => buildItem(range, lineTextByLine));
 
+    const relativePath = vscode.workspace.asRelativePath(uri);
     groups.push({
       uri: uri.toString(),
-      relativePath: vscode.workspace.asRelativePath(uri),
+      relativePath,
       items,
       collapsed: false,
+      isTest: await classifier.isTestReference(uri),
     });
   }
 
-  groups.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  // Non-test groups first, test groups below — each block sorted alphabetically
+  // by relative path.
+  groups.sort(
+    (a, b) =>
+      Number(a.isTest) - Number(b.isTest) || a.relativePath.localeCompare(b.relativePath)
+  );
   return groups;
 }
 

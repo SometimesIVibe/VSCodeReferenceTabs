@@ -263,6 +263,28 @@ body {
   font-size: 0.8em;
 }
 
+/* Test-project groups read as secondary: the whole header is dimmed, and a
+   small "test" badge sits before the result count. */
+.group-header.test .chevron,
+.group-header.test .group-path {
+  color: var(--vscode-descriptionForeground);
+}
+
+.group-header.test .group-path {
+  font-weight: 500;
+}
+
+.group-test-badge {
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-descriptionForeground);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
 .group-items.collapsed {
   display: none;
 }

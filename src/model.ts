@@ -30,6 +30,15 @@ export interface FileGroup {
   items: SearchResultItem[];
   /** UI collapse state (Step 3 toggles this; defaults to expanded). */
   collapsed: boolean;
+  /**
+   * Whether this file belongs to a .NET test project, decided by locating
+   * the nearest enclosing `.csproj` and parsing it (see
+   * `TestProjectClassifier`). Test groups sort below the non-test groups and
+   * render with a "test" badge. Derived at search time;
+   * searches persisted before this field predate it, so their groups load
+   * without it (rendered as non-test) until the search is re-run.
+   */
+  isTest: boolean;
 }
 
 /** One completed search, grouped by file. */
