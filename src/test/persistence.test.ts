@@ -116,6 +116,32 @@ suite("SearchPersistence", () => {
     await assert.doesNotReject(persistence.deleteSearch("never-existed"));
   });
 
+  test("clearAll removes every persisted search file", async () => {
+    await persistence.saveSearch(makeSearch("a"));
+    await persistence.saveSearch(makeSearch("b"));
+    await persistence.saveSearch(makeSearch("c"));
+    assert.strictEqual((await persistence.loadAll()).length, 3);
+
+    await persistence.clearAll();
+
+    assert.strictEqual((await persistence.loadAll()).length, 0);
+    assert.deepStrictEqual(fs.readdirSync(searchesDir()), []);
+  });
+
+  test("clearAll cancels a pending debounced write", async () => {
+    const file = path.join(searchesDir(), "pending.json");
+    persistence.scheduleSave(makeSearch("pending"));
+
+    await persistence.clearAll();
+    await delay(400); // past the debounce window — the write must not fire
+
+    assert.strictEqual(fs.existsSync(file), false);
+  });
+
+  test("clearAll on an empty/absent directory does not throw", async () => {
+    await assert.doesNotReject(persistence.clearAll());
+  });
+
   test("scheduleSave debounces rapid writes into a single, final write", async () => {
     const file = path.join(searchesDir(), "s3.json");
 

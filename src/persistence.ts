@@ -55,6 +55,34 @@ export class SearchPersistence implements vscode.Disposable {
   }
 
   /**
+   * Deletes every persisted search file (best-effort) and cancels any pending
+   * debounced writes. Used at startup so searches never carry across VS Code
+   * sessions.
+   */
+  public async clearAll(): Promise<void> {
+    for (const timer of this.pendingTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.pendingTimers.clear();
+
+    let entries: [string, vscode.FileType][];
+    try {
+      entries = await vscode.workspace.fs.readDirectory(this.searchesDir);
+    } catch {
+      return;
+    }
+    await Promise.all(
+      entries
+        .filter(([name, type]) => type === vscode.FileType.File && name.endsWith(".json"))
+        .map(([name]) =>
+          vscode.workspace.fs
+            .delete(vscode.Uri.joinPath(this.searchesDir, name))
+            .then(undefined, () => undefined)
+        )
+    );
+  }
+
+  /**
    * Reads every search file in the searches directory. Files that fail to
    * parse into a well-formed `Search` are deleted (best-effort) and skipped
    * rather than failing the whole restore.

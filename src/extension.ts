@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { PanelViewProvider } from "./panel/PanelViewProvider";
 import { rerunSearch, runSearch } from "./search";
-import { Search, SearchKind } from "./model";
+import { SearchKind } from "./model";
 import { DEFAULT_MAX_SEARCHES, SearchStore } from "./store";
 import { SearchPersistence } from "./persistence";
 
@@ -149,11 +149,12 @@ export function activate(context: vscode.ExtensionContext): void {
     store.replace(refreshed);
   }
 
-  // Fire-and-forget: does not block activation. `store.seed` prepends
-  // restored searches ahead of anything a user command already added while
-  // this was loading, so a fast `Ctrl+Alt+A` right after window-reload
-  // can't be clobbered by a slow restore.
-  void restore(context, persistence, store);
+  // Searches are intentionally not restored across sessions: wipe any state
+  // persisted by a previous window so the panel always opens empty. The store
+  // keeps writing during the session (cheap, and harmless — it is simply never
+  // read back); this clears whatever the last session left behind. Fire-and-
+  // forget so it never blocks activation.
+  void clearPersistedState(context, persistence);
 }
 
 function readMaxSearches(): number {
@@ -167,46 +168,14 @@ function readAutoReveal(): boolean {
   return vscode.workspace.getConfiguration(CONFIG_SECTION).get<boolean>("autoReveal", true);
 }
 
-/** Loads persisted searches, orders them by the saved tab order (falling back to `createdAt`), and seeds `store`. */
-async function restore(
+/** Wipes persisted searches and saved tab state so nothing is restored on the next VS Code launch. */
+async function clearPersistedState(
   context: vscode.ExtensionContext,
-  persistence: SearchPersistence,
-  store: SearchStore
+  persistence: SearchPersistence
 ): Promise<void> {
-  const loaded = await persistence.loadAll();
-  if (loaded.length === 0) {
-    return;
-  }
-
-  const savedOrder = context.workspaceState.get<string[]>(TAB_ORDER_KEY) ?? [];
-  const savedActiveId = context.workspaceState.get<string>(ACTIVE_ID_KEY);
-
-  const ordered = orderByTabOrder(loaded, savedOrder);
-  const activeId =
-    savedActiveId !== undefined && ordered.some((s) => s.id === savedActiveId)
-      ? savedActiveId
-      : ordered[ordered.length - 1]?.id;
-
-  store.seed(ordered, activeId);
-}
-
-/** Orders `searches` by their position in `savedOrder`; searches missing from `savedOrder` are appended, sorted by `createdAt` ascending. */
-function orderByTabOrder(searches: readonly Search[], savedOrder: readonly string[]): Search[] {
-  const byId = new Map(searches.map((s) => [s.id, s]));
-  const ordered: Search[] = [];
-
-  for (const id of savedOrder) {
-    const search = byId.get(id);
-    if (search) {
-      ordered.push(search);
-      byId.delete(id);
-    }
-  }
-
-  const remaining = [...byId.values()].sort((a, b) => a.createdAt - b.createdAt);
-  ordered.push(...remaining);
-
-  return ordered;
+  await persistence.clearAll();
+  await context.workspaceState.update(TAB_ORDER_KEY, undefined);
+  await context.workspaceState.update(ACTIVE_ID_KEY, undefined);
 }
 
 export function deactivate(): void {
