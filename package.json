@@ -66,6 +66,11 @@
         "icon": "$(close-all)"
       },
       {
+        "command": "referenceTabs.closeActive",
+        "title": "Reference Tabs: Close Active Tab",
+        "shortTitle": "Close Tab"
+      },
+      {
         "command": "referenceTabs.togglePin",
         "title": "Reference Tabs: Pin/Unpin Active Tab"
       },
@@ -117,6 +122,11 @@
         "command": "referenceTabs.findImplementations",
         "key": "ctrl+alt+s",
         "when": "editorHasImplementationProvider && editorTextFocus"
+      },
+      {
+        "command": "referenceTabs.closeActive",
+        "key": "ctrl+alt+w",
+        "when": "focusedView == referenceTabs.panel"
       }
     ],
     "configuration": {

@@ -58,6 +58,10 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("referenceTabs.closeActive", () => closeActiveCommand())
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand("referenceTabs.togglePin", () => togglePinCommand())
   );
 
@@ -108,6 +112,15 @@ export function activate(context: vscode.ExtensionContext): void {
     }
 
     store.closeUnpinned();
+  }
+
+  async function closeActiveCommand(): Promise<void> {
+    const activeId = store.activeId;
+    if (!activeId) {
+      void vscode.window.showInformationMessage("Reference Tabs: no active tab to close.");
+      return;
+    }
+    store.close(activeId);
   }
 
   async function togglePinCommand(): Promise<void> {
