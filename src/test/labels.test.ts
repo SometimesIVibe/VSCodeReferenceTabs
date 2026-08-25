@@ -71,7 +71,7 @@ suite("SearchLabelBuilder", () => {
       lineTextBeforeWord: "new ",
     });
 
-    assert.strictEqual(label, "Foo()");
+    assert.strictEqual(label, "new Foo()");
   });
 
   test("`new Some.Ns.Foo(` qualified usage still recognizes the `new` keyword", () => {
@@ -80,7 +80,7 @@ suite("SearchLabelBuilder", () => {
       lineTextBeforeWord: "new Some.Ns.",
     });
 
-    assert.strictEqual(label, "Foo()");
+    assert.strictEqual(label, "new Foo()");
   });
 
   test("`renew Foo` is NOT a constructor usage (word-boundary check on `new`)", () => {
@@ -99,7 +99,7 @@ suite("SearchLabelBuilder", () => {
       enclosing: { name: "Foo", kind: "constructor" },
     });
 
-    assert.strictEqual(label, "Foo()");
+    assert.strictEqual(label, "new Foo()");
   });
 
   test("enclosing name equal to the word but kind \"other\" (e.g. a record) stays the plain word", () => {

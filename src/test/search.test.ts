@@ -190,8 +190,8 @@ suite("search (end-to-end against the fixture workspace)", () => {
     // TS's "go to definition" resolves both `EnglishGreeter` usages to the
     // same class declaration (no explicit constructor to distinguish them),
     // so the definition-location component of the key is identical; only
-    // the label differs ("EnglishGreeter" vs "EnglishGreeter()"), and that
-    // is exactly what must keep the keys apart.
+    // the label differs ("EnglishGreeter" vs "new EnglishGreeter()"), and
+    // that is exactly what must keep the keys apart.
     const typeRef = splitKeyLabel(typeRefSearch!.key);
     const newExpr = splitKeyLabel(newExprSearch!.key);
 
@@ -201,6 +201,6 @@ suite("search (end-to-end against the fixture workspace)", () => {
       "both usages must resolve to the same definition location"
     );
     assert.strictEqual(typeRef.label, "EnglishGreeter");
-    assert.strictEqual(newExpr.label, "EnglishGreeter()");
+    assert.strictEqual(newExpr.label, "new EnglishGreeter()");
   });
 });

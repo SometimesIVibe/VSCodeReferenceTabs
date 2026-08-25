@@ -39,10 +39,10 @@ export interface LabelInput {
  *    prefix TypeScript's symbol provider puts on the enclosing name (the
  *    `.word` suffix already carries that information).
  * 2. Constructor *usage* — `lineTextBeforeWord` ends with the `new` keyword
- *    (allowing a qualified `new Some.Ns.` prefix before `word`) → `word()`.
+ *    (allowing a qualified `new Some.Ns.` prefix before `word`) → `new word()`.
  * 3. Constructor *declaration* — the enclosing symbol's kind is
  *    `"constructor"` (or, C#-record-style, its name equals `word` while its
- *    kind is `"constructor"`) → `word()`.
+ *    kind is `"constructor"`) → `new word()`.
  * 4. Otherwise → `word` unchanged.
  */
 export class SearchLabelBuilder {
@@ -55,11 +55,11 @@ export class SearchLabelBuilder {
     }
 
     if (this.isNewKeywordUsage(lineTextBeforeWord)) {
-      return `${word}()`;
+      return `new ${word}()`;
     }
 
     if (enclosing?.kind === "constructor") {
-      return `${word}()`;
+      return `new ${word}()`;
     }
 
     return word;
