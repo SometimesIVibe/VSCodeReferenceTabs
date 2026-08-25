@@ -107,7 +107,7 @@
         },
         {
           "command": "referenceTabs.findImplementations",
-          "when": "editorHasImplementationProvider && editorTextFocus",
+          "when": "editorHasReferenceProvider && editorTextFocus",
           "group": "navigation"
         }
       ]
@@ -121,7 +121,7 @@
       {
         "command": "referenceTabs.findImplementations",
         "key": "ctrl+alt+s",
-        "when": "editorHasImplementationProvider && editorTextFocus"
+        "when": "editorHasReferenceProvider && editorTextFocus"
       },
       {
         "command": "referenceTabs.closeActive",
