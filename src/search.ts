@@ -339,12 +339,15 @@ async function buildGroups(locations: NormalizedLocation[]): Promise<FileGroup[]
     const items: SearchResultItem[] = ranges.map((range) => buildItem(range, lineTextByLine));
 
     const relativePath = vscode.workspace.asRelativePath(uri);
+    const isTest = await classifier.isTestReference(uri);
     groups.push({
       uri: uri.toString(),
       relativePath,
       items,
-      collapsed: false,
-      isTest: await classifier.isTestReference(uri),
+      // Test-project groups start collapsed so the non-test results are what
+      // you see first; non-test groups start expanded.
+      collapsed: isTest,
+      isTest,
     });
   }
 
