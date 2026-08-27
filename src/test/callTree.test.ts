@@ -35,14 +35,18 @@ suite("callTree", () => {
       assert.strictEqual(nodes.find((n) => n.name === "B")!.branchTest, true);
     });
 
-    test("a non-test node whose loaded callers are all test rolls up to a test branch", () => {
+    test("a non-test node whose loaded callers are all test is an 'only used by tests' branch", () => {
       const prod = node("Prod", false, {
         loaded: true,
         expanded: true,
         children: [node("Test1", true, { loaded: true }), node("Test2", true, { loaded: true })],
       });
       recomputeAndSort([prod]);
-      assert.strictEqual(prod.branchTest, true, "all callers test => test branch");
+      // The view distinguishes the two flavors of the dimmed marking from
+      // these two flags: branchTest && !isTest => "only used by tests" (a
+      // production node reached only from tests), vs isTest => "test".
+      assert.strictEqual(prod.branchTest, true, "all callers test => dimmed test branch");
+      assert.strictEqual(prod.isTest, false, "the node itself is production => 'only used by tests'");
     });
 
     test("a node with even one non-test caller is not a test branch", () => {

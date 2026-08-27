@@ -340,9 +340,7 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding-top: 2px;
-  padding-bottom: 2px;
-  padding-right: 8px;
+  padding: 2px 8px 2px 6px;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -350,6 +348,15 @@ body {
 
 .call-node:hover {
   background-color: var(--vscode-list-hoverBackground);
+}
+
+/* Each expanded level's callers nest inside this container: an indent plus a
+   vertical guide line make the branch structure explicit. */
+.call-children {
+  margin-left: 13px;
+  padding-left: 4px;
+  border-left: 1px solid
+    var(--vscode-tree-indentGuidesStroke, var(--vscode-panel-border));
 }
 
 .call-chevron,
@@ -388,6 +395,13 @@ body {
   letter-spacing: 0.04em;
   opacity: 0.85;
   flex-shrink: 0;
+  margin-left: 4px;
+}
+
+/* The longer "only used by tests" label reads better as normal-case text. */
+.call-test-badge.usedby {
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 /* Syntax-highlighting palette (highlight.js token classes).
