@@ -257,7 +257,11 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1 1 auto;
+  /* Only take the space the path needs (shrinking with an ellipsis when long)
+     so the "test" badge sits right after the title rather than being pushed
+     to the far right; the count is pushed right on its own (margin-left:auto). */
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .group-count {
@@ -266,6 +270,8 @@ body {
   border-radius: 3px;
   padding: 0 5px;
   font-size: 0.8em;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 /* Test-project groups read as secondary: the whole header is dimmed, and a
@@ -288,6 +294,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   opacity: 0.85;
+  flex-shrink: 0;
 }
 
 .group-items.collapsed {
