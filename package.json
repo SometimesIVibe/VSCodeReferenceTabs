@@ -130,7 +130,7 @@
       },
       {
         "command": "referenceTabs.findImplementations",
-        "key": "ctrl+alt+s",
+        "key": "ctrl+alt+i",
         "when": "editorHasReferenceProvider && editorTextFocus"
       },
       {
