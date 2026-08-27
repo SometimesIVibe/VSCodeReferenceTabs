@@ -54,6 +54,11 @@
         "shortTitle": "Find Implementations (Tabs)"
       },
       {
+        "command": "referenceTabs.showCallHierarchy",
+        "title": "Reference Tabs: Show Caller Hierarchy",
+        "shortTitle": "Caller Hierarchy (Tabs)"
+      },
+      {
         "command": "referenceTabs.clearAll",
         "title": "Reference Tabs: Close All Tabs",
         "shortTitle": "Close All",
@@ -107,6 +112,11 @@
         },
         {
           "command": "referenceTabs.findImplementations",
+          "when": "editorHasReferenceProvider && editorTextFocus",
+          "group": "navigation"
+        },
+        {
+          "command": "referenceTabs.showCallHierarchy",
           "when": "editorHasReferenceProvider && editorTextFocus",
           "group": "navigation"
         }

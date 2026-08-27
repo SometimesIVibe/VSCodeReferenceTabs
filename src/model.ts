@@ -6,7 +6,54 @@
  * (Step 4) and restored without depending on live editor state.
  */
 
-export type SearchKind = "references" | "implementations";
+export type SearchKind = "references" | "implementations" | "callHierarchy";
+
+/** Plain, JSON-serializable range (start/end line+character), used by call-hierarchy nodes so they need no live `vscode.Range`. */
+export interface PlainRange {
+  startLine: number;
+  startCharacter: number;
+  endLine: number;
+  endCharacter: number;
+}
+
+/**
+ * One node in an incoming-call hierarchy tree (a *caller* of its parent).
+ * Fully JSON-serializable: it keeps enough of the underlying
+ * `vscode.CallHierarchyItem` (`symbolKind` + `range` + `selectionRange` +
+ * `uri`) to reconstruct that item on demand and lazily fetch this node's own
+ * callers (see `callHierarchy.ts`), so the whole tree round-trips through the
+ * webview and the store like any other search data.
+ */
+export interface CallNode {
+  /** Stable id within its tree — UI identity and lazy-expand targeting. */
+  id: string;
+  /** Caller symbol name. */
+  name: string;
+  /** Provider-supplied detail (containing type/namespace); may be empty. */
+  detail: string;
+  /** `vscode.SymbolKind` numeric value, kept to reconstruct the CallHierarchyItem. */
+  symbolKind: number;
+  /** `vscode.Uri.toString()` of the caller's file. */
+  uri: string;
+  /** Full range of the caller item. */
+  range: PlainRange;
+  /** Name/selection range — where clicking the node navigates. */
+  selectionRange: PlainRange;
+  /** The caller's file is in a .NET test project (this node's own status). */
+  isTest: boolean;
+  /**
+   * Rolled-up test status: true when this node and every caller loaded
+   * beneath it are test-only. Falls back to `isTest` while unexpanded. Test
+   * branches sort to the bottom of their level and render dimmed.
+   */
+  branchTest: boolean;
+  /** Whether this node's callers have been fetched yet (lazy expansion). */
+  loaded: boolean;
+  /** UI expand state. */
+  expanded: boolean;
+  /** Caller nodes (incoming calls into this one). */
+  children: CallNode[];
+}
 
 /** A single match within a file, ready for display. */
 export interface SearchResultItem {
@@ -65,9 +112,16 @@ export interface Search {
   originLine: number;
   /** Epoch ms. */
   createdAt: number;
-  /** Results grouped by file, sorted by `relativePath`. */
+  /** Results grouped by file, sorted by `relativePath`. Empty for `callHierarchy` searches. */
   groups: FileGroup[];
-  /** Sum of `items.length` across all groups. */
+  /**
+   * Incoming-call tree for `kind === "callHierarchy"` — the top-level entries
+   * are the direct callers of the searched symbol; each node's `children` are
+   * lazily filled in on expand. `undefined`/absent for reference and
+   * implementation searches (which use `groups`).
+   */
+  callTree?: CallNode[];
+  /** Sum of `items.length` across all groups, or the number of direct callers for a call-hierarchy search. */
   totalCount: number;
   /**
    * Whether this tab is pinned. Pinned tabs sort leftmost, are exempt from

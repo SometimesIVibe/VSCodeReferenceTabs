@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
-import { Search } from "./model";
+import { CallNode, Search } from "./model";
 import { SearchPersistence } from "./persistence";
+import { findCallNode, recomputeAndSort } from "./callTree";
 
 /** Fallback cap on stored searches (mirrors the `referenceTabs.maxSearches` setting default) used before the setting is read. */
 export const DEFAULT_MAX_SEARCHES = 30;
@@ -271,6 +272,52 @@ export class SearchStore implements vscode.Disposable {
       return;
     }
     group.collapsed = collapsed;
+    this.persistence?.scheduleSave(search);
+    this._onDidChange.fire();
+  }
+
+  /** Looks up a call-hierarchy node by id within a search's tree; `undefined` if the search isn't a call hierarchy or the node is gone. */
+  public getCallNode(searchId: string, nodeId: string): CallNode | undefined {
+    const search = this.searches.find((s) => s.id === searchId);
+    if (!search?.callTree) {
+      return undefined;
+    }
+    return findCallNode(search.callTree, nodeId);
+  }
+
+  /**
+   * Attaches lazily-fetched callers to a call-hierarchy node, marks it
+   * loaded + expanded, and re-rolls-up/re-sorts the tree (test branches to the
+   * bottom). Debounce-persists and notifies.
+   */
+  public setCallNodeChildren(searchId: string, nodeId: string, children: CallNode[]): void {
+    const search = this.searches.find((s) => s.id === searchId);
+    if (!search?.callTree) {
+      return;
+    }
+    const node = findCallNode(search.callTree, nodeId);
+    if (!node) {
+      return;
+    }
+    node.children = children;
+    node.loaded = true;
+    node.expanded = true;
+    recomputeAndSort(search.callTree);
+    this.persistence?.scheduleSave(search);
+    this._onDidChange.fire();
+  }
+
+  /** Toggles the expand state of an already-loaded call-hierarchy node. Debounce-persists and notifies. */
+  public setCallNodeExpanded(searchId: string, nodeId: string, expanded: boolean): void {
+    const search = this.searches.find((s) => s.id === searchId);
+    if (!search?.callTree) {
+      return;
+    }
+    const node = findCallNode(search.callTree, nodeId);
+    if (!node || node.expanded === expanded) {
+      return;
+    }
+    node.expanded = expanded;
     this.persistence?.scheduleSave(search);
     this._onDidChange.fire();
   }

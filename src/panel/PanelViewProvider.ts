@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
 import { SearchStore } from "../store";
+import { incomingCallsFor } from "../callHierarchy";
 import {
   SearchSummary,
   StateMessage,
@@ -76,6 +77,9 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       case "togglePin":
         this.store.togglePin(message.id);
         break;
+      case "toggleCallNode":
+        void this.toggleCallNode(message.id, message.nodeId);
+        break;
       case "closeOthers":
         this.store.closeOthers(message.id);
         break;
@@ -88,6 +92,28 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       case "open":
         void this.openLocation(message);
         break;
+    }
+  }
+
+  /**
+   * Expands or collapses a call-hierarchy node. On first expand the node's
+   * callers are fetched lazily; afterwards it is a pure collapse/expand toggle
+   * against the already-loaded children.
+   */
+  private async toggleCallNode(searchId: string, nodeId: string): Promise<void> {
+    const node = this.store.getCallNode(searchId, nodeId);
+    if (!node) {
+      return;
+    }
+    if (node.loaded) {
+      this.store.setCallNodeExpanded(searchId, nodeId, !node.expanded);
+      return;
+    }
+    try {
+      const children = await incomingCallsFor(node);
+      this.store.setCallNodeChildren(searchId, nodeId, children);
+    } catch {
+      void vscode.window.showWarningMessage("Reference Tabs: could not load callers.");
     }
   }
 

@@ -74,6 +74,17 @@ export interface TogglePinMessage {
   id: string;
 }
 
+/**
+ * webview -> ext: user clicked a call-hierarchy node's expand/collapse
+ * chevron. `id` is the search id, `nodeId` the node within its tree. The
+ * extension expands (lazily fetching callers the first time) or collapses it.
+ */
+export interface ToggleCallNodeMessage {
+  type: "toggleCallNode";
+  id: string;
+  nodeId: string;
+}
+
 /** webview -> ext: context-menu "Close Others" — closes every other unpinned tab. */
 export interface CloseOthersMessage {
   type: "closeOthers";
@@ -98,6 +109,7 @@ export type WebviewToExtensionMessage =
   | ToggleGroupMessage
   | SetAllGroupsMessage
   | TogglePinMessage
+  | ToggleCallNodeMessage
   | CloseOthersMessage
   | CloseAllMessage
   | CloseAllKeepPinnedMessage;

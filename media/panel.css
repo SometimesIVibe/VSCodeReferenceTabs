@@ -98,6 +98,11 @@ body {
   color: var(--vscode-editor-background);
 }
 
+.tab-badge.kind-callhierarchy {
+  background-color: var(--vscode-charts-purple);
+  color: var(--vscode-editor-background);
+}
+
 .tab-symbol {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -319,6 +324,63 @@ body {
 
 .result-text .match {
   background-color: var(--vscode-editor-findMatchHighlightBackground);
+}
+
+/* Call-hierarchy tree (kind === "callHierarchy"). Each node is one row;
+   depth is applied inline as left padding. A test-only branch is dimmed and
+   badged, and already sorts to the bottom of its level on the extension side. */
+.call-node {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-right: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.call-node:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.call-chevron,
+.call-spacer {
+  display: inline-block;
+  width: 1em;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+}
+
+.call-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-detail {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-node.test .call-name,
+.call-node.test .call-detail {
+  color: var(--vscode-descriptionForeground);
+}
+
+.call-test-badge {
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-descriptionForeground);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  flex-shrink: 0;
 }
 
 /* Syntax-highlighting palette (highlight.js token classes).

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { PanelViewProvider } from "./panel/PanelViewProvider";
 import { rerunSearch, runSearch } from "./search";
+import { prepareIncomingCallHierarchy } from "./callHierarchy";
 import { SearchKind } from "./model";
 import { DEFAULT_MAX_SEARCHES, SearchStore } from "./store";
 import { SearchPersistence } from "./persistence";
@@ -50,6 +51,12 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("referenceTabs.showCallHierarchy", () =>
+      callHierarchyCommand()
+    )
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand("referenceTabs.clearAll", () => clearAllCommand())
   );
 
@@ -79,6 +86,26 @@ export function activate(context: vscode.ExtensionContext): void {
     const search = await runSearch(kind, editor);
     if (!search) {
       // runSearch already showed a user-facing message; no tab to create.
+      return;
+    }
+
+    store.add(search);
+
+    if (readAutoReveal()) {
+      await vscode.commands.executeCommand("referenceTabs.panel.focus");
+    }
+  }
+
+  async function callHierarchyCommand(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      void vscode.window.showWarningMessage("Reference Tabs: no active editor.");
+      return;
+    }
+
+    const search = await prepareIncomingCallHierarchy(editor);
+    if (!search) {
+      // prepareIncomingCallHierarchy already showed a user-facing message.
       return;
     }
 
