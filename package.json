@@ -132,11 +132,6 @@
         "command": "referenceTabs.findImplementations",
         "key": "ctrl+alt+i",
         "when": "editorHasReferenceProvider && editorTextFocus"
-      },
-      {
-        "command": "referenceTabs.closeActive",
-        "key": "ctrl+alt+w",
-        "when": "focusedView == referenceTabs.panel"
       }
     ],
     "configuration": {
