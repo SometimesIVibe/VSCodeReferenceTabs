@@ -132,6 +132,11 @@
         "command": "referenceTabs.findImplementations",
         "key": "ctrl+alt+i",
         "when": "editorHasReferenceProvider && editorTextFocus"
+      },
+      {
+        "command": "referenceTabs.showCallHierarchy",
+        "key": "ctrl+alt+u",
+        "when": "editorHasReferenceProvider && editorTextFocus"
       }
     ],
     "configuration": {
