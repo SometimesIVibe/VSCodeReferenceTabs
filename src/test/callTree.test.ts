@@ -1,6 +1,6 @@
 import * as assert from "assert";
-import { CallNode } from "../model";
-import { findCallNode, recomputeAndSort } from "../callTree";
+import { CallGroup, CallNode } from "../model";
+import { allRootsTest, findCallNode, orderCallGroups, recomputeAndSort } from "../callTree";
 
 /**
  * Pure unit suite for the call-tree roll-up + ordering ({@link recomputeAndSort})
@@ -97,6 +97,49 @@ suite("callTree", () => {
       assert.deepStrictEqual(
         parent.children.map((n) => n.name),
         ["aProd", "tImpl"]
+      );
+    });
+  });
+
+  suite("orderCallGroups", () => {
+    function group(title: string, kind: CallGroup["kind"], isTest: boolean): CallGroup {
+      return { id: `g-${title}`, title, kind, roots: [], isTest, collapsed: isTest };
+    }
+
+    test("interface group is first; implementations follow with test groups last", () => {
+      const groups = [
+        group("BetaHandler", "implementation", false),
+        group("ZebraTestHandler", "implementation", true),
+        group("AlphaHandler", "implementation", false),
+        group("IHandler", "interface", false),
+      ];
+      orderCallGroups(groups);
+      assert.deepStrictEqual(
+        groups.map((g) => g.title),
+        ["IHandler", "AlphaHandler", "BetaHandler", "ZebraTestHandler"]
+      );
+    });
+
+    test("a test-only interface group still sorts before implementations", () => {
+      const groups = [
+        group("ProdHandler", "implementation", false),
+        group("IHandler", "interface", true),
+      ];
+      orderCallGroups(groups);
+      assert.deepStrictEqual(
+        groups.map((g) => g.title),
+        ["IHandler", "ProdHandler"]
+      );
+    });
+  });
+
+  suite("allRootsTest", () => {
+    test("true only when there is at least one root and all are test branches", () => {
+      assert.strictEqual(allRootsTest([]), false);
+      assert.strictEqual(allRootsTest([node("A", true, { branchTest: true })]), true);
+      assert.strictEqual(
+        allRootsTest([node("A", true, { branchTest: true }), node("B", false, { branchTest: false })]),
+        false
       );
     });
   });

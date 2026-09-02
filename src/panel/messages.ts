@@ -85,6 +85,14 @@ export interface ToggleCallNodeMessage {
   nodeId: string;
 }
 
+/** webview -> ext: user clicked an interface/implementation group header in a call hierarchy. */
+export interface ToggleCallGroupMessage {
+  type: "toggleCallGroup";
+  id: string;
+  groupId: string;
+  collapsed: boolean;
+}
+
 /** webview -> ext: context-menu "Close Others" — closes every other unpinned tab. */
 export interface CloseOthersMessage {
   type: "closeOthers";
@@ -110,6 +118,7 @@ export type WebviewToExtensionMessage =
   | SetAllGroupsMessage
   | TogglePinMessage
   | ToggleCallNodeMessage
+  | ToggleCallGroupMessage
   | CloseOthersMessage
   | CloseAllMessage
   | CloseAllKeepPinnedMessage;

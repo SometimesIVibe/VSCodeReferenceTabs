@@ -276,48 +276,80 @@ export class SearchStore implements vscode.Disposable {
     this._onDidChange.fire();
   }
 
-  /** Looks up a call-hierarchy node by id within a search's tree; `undefined` if the search isn't a call hierarchy or the node is gone. */
+  /**
+   * The root caller arrays of a call-hierarchy search: the per-group root
+   * lists for an interface search, or the single `callTree` otherwise. A node
+   * lookup/roll-up is scoped to whichever array actually holds the node.
+   */
+  private callRootArrays(search: Search): CallNode[][] {
+    if (search.callGroups) {
+      return search.callGroups.map((group) => group.roots);
+    }
+    return search.callTree ? [search.callTree] : [];
+  }
+
+  /** Looks up a call-hierarchy node by id anywhere in a search (flat tree or any group); `undefined` if absent. */
   public getCallNode(searchId: string, nodeId: string): CallNode | undefined {
     const search = this.searches.find((s) => s.id === searchId);
-    if (!search?.callTree) {
+    if (!search) {
       return undefined;
     }
-    return findCallNode(search.callTree, nodeId);
+    for (const roots of this.callRootArrays(search)) {
+      const node = findCallNode(roots, nodeId);
+      if (node) {
+        return node;
+      }
+    }
+    return undefined;
   }
 
   /**
    * Attaches lazily-fetched callers to a call-hierarchy node, marks it
-   * loaded + expanded, and re-rolls-up/re-sorts the tree (test branches to the
-   * bottom). Debounce-persists and notifies.
+   * loaded + expanded, and re-rolls-up/re-sorts the tree it belongs to (test
+   * branches to the bottom). Debounce-persists and notifies.
    */
   public setCallNodeChildren(searchId: string, nodeId: string, children: CallNode[]): void {
     const search = this.searches.find((s) => s.id === searchId);
-    if (!search?.callTree) {
+    if (!search) {
       return;
     }
-    const node = findCallNode(search.callTree, nodeId);
-    if (!node) {
+    for (const roots of this.callRootArrays(search)) {
+      const node = findCallNode(roots, nodeId);
+      if (!node) {
+        continue;
+      }
+      node.children = children;
+      node.loaded = true;
+      node.expanded = true;
+      recomputeAndSort(roots);
+      this.persistence?.scheduleSave(search);
+      this._onDidChange.fire();
       return;
     }
-    node.children = children;
-    node.loaded = true;
-    node.expanded = true;
-    recomputeAndSort(search.callTree);
-    this.persistence?.scheduleSave(search);
-    this._onDidChange.fire();
   }
 
   /** Toggles the expand state of an already-loaded call-hierarchy node. Debounce-persists and notifies. */
   public setCallNodeExpanded(searchId: string, nodeId: string, expanded: boolean): void {
-    const search = this.searches.find((s) => s.id === searchId);
-    if (!search?.callTree) {
-      return;
-    }
-    const node = findCallNode(search.callTree, nodeId);
+    const node = this.getCallNode(searchId, nodeId);
     if (!node || node.expanded === expanded) {
       return;
     }
     node.expanded = expanded;
+    const search = this.searches.find((s) => s.id === searchId);
+    if (search) {
+      this.persistence?.scheduleSave(search);
+    }
+    this._onDidChange.fire();
+  }
+
+  /** Toggles the collapse state of a call-hierarchy group (interface/implementation section). Debounce-persists and notifies. */
+  public setCallGroupCollapsed(searchId: string, groupId: string, collapsed: boolean): void {
+    const search = this.searches.find((s) => s.id === searchId);
+    const group = search?.callGroups?.find((g) => g.id === groupId);
+    if (!search || !group || group.collapsed === collapsed) {
+      return;
+    }
+    group.collapsed = collapsed;
     this.persistence?.scheduleSave(search);
     this._onDidChange.fire();
   }

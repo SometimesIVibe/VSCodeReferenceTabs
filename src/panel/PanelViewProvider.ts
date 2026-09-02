@@ -80,6 +80,9 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       case "toggleCallNode":
         void this.toggleCallNode(message.id, message.nodeId);
         break;
+      case "toggleCallGroup":
+        this.store.setCallGroupCollapsed(message.id, message.groupId, message.collapsed);
+        break;
       case "closeOthers":
         this.store.closeOthers(message.id);
         break;

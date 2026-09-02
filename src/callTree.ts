@@ -4,7 +4,7 @@
  * from `callHierarchy.ts` (which does the `vscode` provider I/O) so this logic
  * is unit-testable in plain node.
  */
-import { CallNode } from "./model";
+import { CallGroup, CallNode } from "./model";
 
 /**
  * Recomputes every node's rolled-up `branchTest` bottom-up and orders each
@@ -49,6 +49,29 @@ function sortLevel(nodes: CallNode[]): void {
   nodes.sort(
     (a, b) => Number(a.branchTest) - Number(b.branchTest) || a.name.localeCompare(b.name)
   );
+}
+
+/**
+ * Orders call-hierarchy groups in place: the interface group first, then the
+ * implementation groups with the non-test ones before the test-only ones
+ * (matching how test branches sort to the bottom elsewhere), tie-broken by
+ * title.
+ */
+export function orderCallGroups(groups: CallGroup[]): void {
+  groups.sort((a, b) => {
+    const aInterface = a.kind === "interface" ? 0 : 1;
+    const bInterface = b.kind === "interface" ? 0 : 1;
+    return (
+      aInterface - bInterface ||
+      Number(a.isTest) - Number(b.isTest) ||
+      a.title.localeCompare(b.title)
+    );
+  });
+}
+
+/** True when a group has direct callers and every one of them is a test branch — used to pre-collapse and order test-only groups. */
+export function allRootsTest(roots: CallNode[]): boolean {
+  return roots.length > 0 && roots.every((root) => root.branchTest);
 }
 
 /** Depth-first lookup of the node with `id` anywhere in `nodes`; `undefined` if absent. */

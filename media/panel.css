@@ -359,6 +359,77 @@ body {
     var(--vscode-tree-indentGuidesStroke, var(--vscode-panel-border));
 }
 
+/* Interface/implementation group sections (interface-member searches). The
+   header is a collapsible divider naming the interface or implementing class. */
+.call-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  user-select: none;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.call-group:first-child .call-group-header {
+  border-top: none;
+}
+
+.call-group-header:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.call-group-kind {
+  flex-shrink: 0;
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vscode-editor-background);
+  background-color: var(--vscode-descriptionForeground);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.call-group-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.call-group-count {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--vscode-badge-foreground);
+  background-color: var(--vscode-badge-background);
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 0.8em;
+}
+
+.call-group-badge.test {
+  flex-shrink: 0;
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-descriptionForeground);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.call-group-header.test .call-group-title {
+  color: var(--vscode-descriptionForeground);
+  font-weight: 500;
+}
+
+.call-group-body.collapsed {
+  display: none;
+}
+
 .call-chevron,
 .call-spacer {
   display: inline-block;

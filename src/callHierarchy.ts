@@ -10,9 +10,9 @@
  */
 import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
-import { CallNode, PlainRange, Search } from "./model";
+import { CallGroup, CallNode, PlainRange, Search } from "./model";
 import { TestProjectClassifier } from "./testProject";
-import { recomputeAndSort } from "./callTree";
+import { allRootsTest, orderCallGroups, recomputeAndSort } from "./callTree";
 
 // One classifier for the whole session: .csproj verdicts are effectively
 // stable within a session, so caching across every prepare/expand is safe and
@@ -43,6 +43,34 @@ export async function prepareIncomingCallHierarchy(
     return undefined;
   }
 
+  const base = {
+    id: randomUUID(),
+    kind: "callHierarchy" as const,
+    symbol: root.name,
+    word: root.name,
+    originUri: document.uri.toString(),
+    originLine: position.line,
+    createdAt: Date.now(),
+    groups: [],
+    pinned: false,
+    key: `callHierarchy|${root.uri.toString()}|${root.selectionRange.start.line}:${root.selectionRange.start.character}|${root.name}`,
+  };
+
+  // If the target is an interface member, split the results into the
+  // interface's own callers plus a group per implementing class.
+  const callGroups = await buildInterfaceGroups(root, document.uri, position);
+  if (callGroups) {
+    if (callGroups.every((group) => group.roots.length === 0)) {
+      void vscode.window.showInformationMessage(
+        `Reference Tabs: no callers found for '${root.name}' or its implementations.`
+      );
+      return undefined;
+    }
+    const totalCount = callGroups.reduce((sum, group) => sum + group.roots.length, 0);
+    return { ...base, callGroups, totalCount };
+  }
+
+  // Plain (concrete/standalone) symbol: a single flat caller tree.
   const roots = await incomingCallsFor(root);
   if (roots.length === 0) {
     void vscode.window.showInformationMessage(
@@ -50,23 +78,67 @@ export async function prepareIncomingCallHierarchy(
     );
     return undefined;
   }
-
   recomputeAndSort(roots);
+  return { ...base, callTree: roots, totalCount: roots.length };
+}
 
-  return {
-    id: randomUUID(),
-    kind: "callHierarchy",
-    symbol: root.name,
-    word: root.name,
-    originUri: document.uri.toString(),
-    originLine: position.line,
-    createdAt: Date.now(),
-    groups: [],
-    callTree: roots,
-    totalCount: roots.length,
-    pinned: false,
-    key: `callHierarchy|${root.uri.toString()}|${root.selectionRange.start.line}:${root.selectionRange.start.character}|${root.name}`,
-  };
+/**
+ * When `root` is an **interface** member, returns the grouped caller trees:
+ * the interface's own callers first, then one group per implementing class
+ * (found via the implementation provider). Returns `undefined` when the
+ * symbol is not an interface member, signalling the flat single-tree path.
+ */
+async function buildInterfaceGroups(
+  root: vscode.CallHierarchyItem,
+  uri: vscode.Uri,
+  position: vscode.Position
+): Promise<CallGroup[] | undefined> {
+  const enclosing = await enclosingType(root.uri, root.selectionRange.start);
+  if (enclosing?.kind !== vscode.SymbolKind.Interface) {
+    return undefined;
+  }
+
+  const groups: CallGroup[] = [makeGroup(enclosing.name, "interface", await incomingCallsFor(root))];
+
+  const seen = new Set<string>([locationKey(root.uri, root.selectionRange.start)]);
+  const implementations = normalizeLocations(
+    await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[] | undefined>(
+      "vscode.executeImplementationProvider",
+      uri,
+      position
+    )
+  );
+  for (const impl of implementations) {
+    const key = locationKey(impl.uri, impl.range.start);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+
+    const implItem = (
+      await vscode.commands.executeCommand<vscode.CallHierarchyItem[] | undefined>(
+        "vscode.prepareCallHierarchy",
+        impl.uri,
+        impl.range.start
+      )
+    )?.[0];
+    if (!implItem) {
+      continue;
+    }
+    const type = await enclosingType(impl.uri, impl.range.start);
+    const title = type?.name ?? (implItem.detail || implItem.name);
+    groups.push(makeGroup(title, "implementation", await incomingCallsFor(implItem)));
+  }
+
+  orderCallGroups(groups);
+  return groups;
+}
+
+/** Builds a group, rolling up + sorting its roots and pre-collapsing it when all its callers are test. */
+function makeGroup(title: string, kind: CallGroup["kind"], roots: CallNode[]): CallGroup {
+  recomputeAndSort(roots);
+  const isTest = allRootsTest(roots);
+  return { id: randomUUID(), title, kind, roots, isTest, collapsed: isTest };
 }
 
 /**
@@ -165,4 +237,68 @@ function toRange(range: PlainRange): vscode.Range {
     new vscode.Position(range.startLine, range.startCharacter),
     new vscode.Position(range.endLine, range.endCharacter)
   );
+}
+
+/**
+ * The innermost enclosing type (class/interface/struct/…) symbol at
+ * `position` in `uri`, via the document-symbol provider. Used both to decide
+ * whether the searched member lives on an interface and to name an
+ * implementation group after its declaring class.
+ */
+async function enclosingType(
+  uri: vscode.Uri,
+  position: vscode.Position
+): Promise<vscode.DocumentSymbol | undefined> {
+  const symbols = await vscode.commands.executeCommand<
+    (vscode.DocumentSymbol | vscode.SymbolInformation)[] | undefined
+  >("vscode.executeDocumentSymbolProvider", uri);
+  return innermostType((symbols ?? []).filter(isDocumentSymbol), position);
+}
+
+const TYPE_KINDS = new Set<vscode.SymbolKind>([
+  vscode.SymbolKind.Interface,
+  vscode.SymbolKind.Class,
+  vscode.SymbolKind.Struct,
+  vscode.SymbolKind.Enum,
+  vscode.SymbolKind.Object,
+]);
+
+function innermostType(
+  symbols: vscode.DocumentSymbol[],
+  position: vscode.Position
+): vscode.DocumentSymbol | undefined {
+  for (const symbol of symbols) {
+    if (!symbol.range.contains(position)) {
+      continue;
+    }
+    const nested = innermostType(symbol.children, position);
+    if (nested) {
+      return nested;
+    }
+    if (TYPE_KINDS.has(symbol.kind)) {
+      return symbol;
+    }
+  }
+  return undefined;
+}
+
+function isDocumentSymbol(
+  symbol: vscode.DocumentSymbol | vscode.SymbolInformation
+): symbol is vscode.DocumentSymbol {
+  return Array.isArray((symbol as vscode.DocumentSymbol).children);
+}
+
+/** Flattens `Location[] | LocationLink[]` from a provider to `{ uri, range }` pairs (target range for links). */
+function normalizeLocations(
+  raw: (vscode.Location | vscode.LocationLink)[] | undefined
+): { uri: vscode.Uri; range: vscode.Range }[] {
+  return (raw ?? []).map((item) =>
+    "targetUri" in item
+      ? { uri: item.targetUri, range: item.targetSelectionRange ?? item.targetRange }
+      : { uri: item.uri, range: item.range }
+  );
+}
+
+function locationKey(uri: vscode.Uri, position: vscode.Position): string {
+  return `${uri.toString()}:${position.line}:${position.character}`;
 }

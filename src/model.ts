@@ -88,6 +88,32 @@ export interface FileGroup {
   isTest: boolean;
 }
 
+/**
+ * A section of a call-hierarchy search when the searched symbol is an
+ * interface member: one group for the interface itself and one per
+ * implementing class. Each holds its own incoming-call tree, lazily expanded
+ * like any {@link CallNode}. Rendered under a collapsible header.
+ */
+export interface CallGroup {
+  /** Stable id — UI identity and collapse targeting. */
+  id: string;
+  /** Header label: the interface type name, or the implementing class name. */
+  title: string;
+  /** Whether this group is the interface itself (shown first) or an implementation. */
+  kind: "interface" | "implementation";
+  /** Direct callers of this group's member; each node's callers load lazily. */
+  roots: CallNode[];
+  /**
+   * Whether every direct caller in this group is test-only, computed once at
+   * creation from the initial roots — used to order test-only groups to the
+   * bottom and to pre-collapse them. The rendered "test" badge is derived
+   * live from `roots` so it stays accurate as nodes expand.
+   */
+  isTest: boolean;
+  /** UI collapse state; pre-collapsed when the group is test-only at creation. */
+  collapsed: boolean;
+}
+
 /** One completed search, grouped by file. */
 export interface Search {
   /** Stable unique id, `crypto.randomUUID()`. */
@@ -121,6 +147,14 @@ export interface Search {
    * implementation searches (which use `groups`).
    */
   callTree?: CallNode[];
+  /**
+   * Grouped incoming-call trees for a `callHierarchy` search whose target is
+   * an **interface** member: the interface's own callers plus one group per
+   * implementing class (see {@link CallGroup}). Present instead of
+   * `callTree` in that case; absent for a search on a concrete/plain symbol,
+   * which uses the flat `callTree`.
+   */
+  callGroups?: CallGroup[];
   /** Sum of `items.length` across all groups, or the number of direct callers for a call-hierarchy search. */
   totalCount: number;
   /**
