@@ -112,6 +112,32 @@ suite("SearchLabelBuilder", () => {
     assert.strictEqual(label, "Foo");
   });
 
+  test("constructor declaration detected by type-name + '(' even when the provider reports a plain method", () => {
+    // Some C# providers label the constructor SymbolKind.Method; the token
+    // equals the enclosing class name and is followed by '(' → constructor.
+    const label = builder.build({
+      word: "Foo",
+      lineTextBeforeWord: "    public ",
+      enclosing: { name: "Foo", kind: "other" },
+      enclosingTypeName: "Foo",
+      wordFollowedByOpenParen: true,
+    });
+
+    assert.strictEqual(label, "new Foo()");
+  });
+
+  test("the class declaration (name === type, but NOT followed by '(') stays the plain word", () => {
+    const label = builder.build({
+      word: "Foo",
+      lineTextBeforeWord: "public class ",
+      enclosing: { name: "Foo", kind: "other" },
+      enclosingTypeName: "Foo",
+      wordFollowedByOpenParen: false,
+    });
+
+    assert.strictEqual(label, "Foo");
+  });
+
   test("empty lineTextBeforeWord does not crash and falls back to the plain word", () => {
     const label = builder.build({
       word: "Foo",

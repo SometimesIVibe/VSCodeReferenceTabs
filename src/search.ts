@@ -159,11 +159,50 @@ async function composeLabel(
     ? { name: innermost.name, kind: mapSymbolKind(innermost.kind) }
     : undefined;
 
-  const lineTextBeforeWord = document
-    .lineAt(wordRange.start.line)
-    .text.slice(0, wordRange.start.character);
+  const lineText = document.lineAt(wordRange.start.line).text;
+  const lineTextBeforeWord = lineText.slice(0, wordRange.start.character);
+  const wordFollowedByOpenParen = lineText.slice(wordRange.end.character).trimStart().startsWith("(");
+  const enclosingTypeName = findEnclosingTypeName(root, wordRange.start);
 
-  return labelBuilder.build({ word, lineTextBeforeWord, enclosing });
+  return labelBuilder.build({
+    word,
+    lineTextBeforeWord,
+    enclosing,
+    enclosingTypeName,
+    wordFollowedByOpenParen,
+  });
+}
+
+/** Names of the `vscode.SymbolKind`s treated as an enclosing "type" for constructor detection. */
+const TYPE_SYMBOL_KINDS = new Set<vscode.SymbolKind>([
+  vscode.SymbolKind.Class,
+  vscode.SymbolKind.Struct,
+  vscode.SymbolKind.Interface,
+  vscode.SymbolKind.Enum,
+  vscode.SymbolKind.Object,
+]);
+
+/** Name of the innermost enclosing type symbol (class/struct/record/interface/…) containing `position`, or `undefined`. */
+function findEnclosingTypeName(
+  symbols: vscode.DocumentSymbol[] | undefined,
+  position: vscode.Position
+): string | undefined {
+  if (!Array.isArray(symbols)) {
+    return undefined;
+  }
+  for (const symbol of symbols) {
+    if (!symbol || !(symbol.range instanceof vscode.Range) || !symbol.range.contains(position)) {
+      continue;
+    }
+    const nested = findEnclosingTypeName(symbol.children, position);
+    if (nested !== undefined) {
+      return nested;
+    }
+    if (TYPE_SYMBOL_KINDS.has(symbol.kind)) {
+      return symbol.name;
+    }
+  }
+  return undefined;
 }
 
 /** Collapses `vscode.SymbolKind` down to the small string union the pure {@link SearchLabelBuilder} understands. */

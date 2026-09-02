@@ -27,6 +27,16 @@ export interface LabelInput {
    * `search.ts`). `undefined` when no symbol provider result was usable.
    */
   enclosing?: { name: string; kind: EnclosingKind } | undefined;
+  /**
+   * Name of the innermost enclosing type (class/struct/record/interface) at
+   * the cursor, when known. With {@link wordFollowedByOpenParen} this
+   * recognizes a constructor *declaration* even when the symbol provider
+   * reports the constructor as a plain method rather than
+   * `SymbolKind.Constructor` (as some C# providers do).
+   */
+  enclosingTypeName?: string | undefined;
+  /** Whether `word` is immediately followed by `(` (ignoring whitespace) — a call/declaration signature. */
+  wordFollowedByOpenParen?: boolean;
 }
 
 /**
@@ -40,9 +50,12 @@ export interface LabelInput {
  *    `.word` suffix already carries that information).
  * 2. Constructor *usage* — `lineTextBeforeWord` ends with the `new` keyword
  *    (allowing a qualified `new Some.Ns.` prefix before `word`) → `new word()`.
- * 3. Constructor *declaration* — the enclosing symbol's kind is
- *    `"constructor"` (or, C#-record-style, its name equals `word` while its
- *    kind is `"constructor"`) → `new word()`.
+ * 3. Constructor *declaration* — either the enclosing symbol's kind is
+ *    `"constructor"`, or the token equals the enclosing type name and is
+ *    immediately followed by `(` (a `ClassName(` signature — a constructor
+ *    even when the provider labels it a plain method). The type-name form is
+ *    what distinguishes it from the class declaration, whose name is followed
+ *    by `:`/`{`/`<`, not `(`. → `new word()`.
  * 4. Otherwise → `word` unchanged.
  */
 export class SearchLabelBuilder {
@@ -58,7 +71,10 @@ export class SearchLabelBuilder {
       return `new ${word}()`;
     }
 
-    if (enclosing?.kind === "constructor") {
+    const isConstructorDeclaration =
+      enclosing?.kind === "constructor" ||
+      (input.enclosingTypeName === word && !!input.wordFollowedByOpenParen);
+    if (isConstructorDeclaration) {
       return `new ${word}()`;
     }
 
