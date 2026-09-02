@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { CallNode, Search } from "./model";
+import { AccessFilter, CallNode, Search } from "./model";
 import { SearchPersistence } from "./persistence";
 import { findCallNode, recomputeAndSort } from "./callTree";
 
@@ -8,6 +8,8 @@ export const DEFAULT_MAX_SEARCHES = 30;
 
 const TAB_ORDER_KEY = "referenceTabs.tabOrder";
 const ACTIVE_ID_KEY = "referenceTabs.activeId";
+/** Remembered Read/Write filter, reused as the default for new tabs. Persists across sessions (not cleared on startup like tab state). */
+const ACCESS_FILTER_KEY = "referenceTabs.accessFilter";
 
 /**
  * In-memory collection of completed searches ("tabs").
@@ -73,7 +75,12 @@ export class SearchStore implements vscode.Disposable {
     const existingIndex = this.searches.findIndex((s) => s.key === search.key);
     if (existingIndex !== -1) {
       const existing = this.searches[existingIndex];
-      const merged: Search = { ...search, id: existing.id, pinned: existing.pinned };
+      const merged: Search = {
+        ...search,
+        id: existing.id,
+        pinned: existing.pinned,
+        accessFilter: existing.accessFilter,
+      };
       this.searches[existingIndex] = merged;
       this.activeSearchId = merged.id;
 
@@ -83,6 +90,8 @@ export class SearchStore implements vscode.Disposable {
       return;
     }
 
+    // A new tab starts from the remembered filter, but only where it applies.
+    search.accessFilter = search.accessAware ? this.lastAccessFilter : "none";
     this.searches.push(search);
     this.activeSearchId = search.id;
 
@@ -106,7 +115,11 @@ export class SearchStore implements vscode.Disposable {
       return;
     }
     const previous = this.searches[index];
-    const replaced: Search = { ...search, pinned: previous.pinned };
+    const replaced: Search = {
+      ...search,
+      pinned: previous.pinned,
+      accessFilter: previous.accessFilter,
+    };
     this.searches[index] = replaced;
     void this.persistence?.saveSearch(replaced);
     this._onDidChange.fire();
@@ -339,6 +352,26 @@ export class SearchStore implements vscode.Disposable {
     if (search) {
       this.persistence?.scheduleSave(search);
     }
+    this._onDidChange.fire();
+  }
+
+  /** The Read/Write filter last chosen by the user, used as the default for new access-aware tabs. Persists across sessions. */
+  public get lastAccessFilter(): AccessFilter {
+    return this.workspaceState?.get<AccessFilter>(ACCESS_FILTER_KEY) ?? "none";
+  }
+
+  /**
+   * Sets a tab's Read/Write filter and remembers it as the default for future
+   * tabs. No-op for a search that isn't access-aware or when unchanged.
+   */
+  public setAccessFilter(id: string, filter: AccessFilter): void {
+    const search = this.searches.find((s) => s.id === id);
+    if (!search || !search.accessAware || search.accessFilter === filter) {
+      return;
+    }
+    search.accessFilter = filter;
+    void this.workspaceState?.update(ACCESS_FILTER_KEY, filter);
+    this.persistence?.scheduleSave(search);
     this._onDidChange.fire();
   }
 

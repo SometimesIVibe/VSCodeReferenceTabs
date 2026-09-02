@@ -65,7 +65,8 @@ export async function runSearch(
     return undefined;
   }
 
-  const groups = await buildGroups(normalized);
+  const accessAware = kind === "references" && (await isAccessAwareTarget(document, position));
+  const groups = await buildGroups(normalized, accessAware);
   const totalCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
   return {
@@ -80,7 +81,78 @@ export async function runSearch(
     totalCount,
     pinned: false,
     key,
+    accessAware,
+    // Default; SearchStore.add seeds a new tab from the remembered last filter
+    // and a re-searched/re-run tab keeps its existing one.
+    accessFilter: "none",
   };
+}
+
+/** `vscode.SymbolKind`s whose references are meaningfully read vs written (so the Read/Write filter applies). */
+const ACCESS_AWARE_KINDS = new Set<vscode.SymbolKind>([
+  vscode.SymbolKind.Field,
+  vscode.SymbolKind.Property,
+  vscode.SymbolKind.Event,
+  vscode.SymbolKind.EnumMember,
+  vscode.SymbolKind.Constant,
+  vscode.SymbolKind.Variable,
+]);
+
+/** True when the definition of the symbol under the cursor is a field/property/event/… (a value that is read and written). */
+async function isAccessAwareTarget(
+  document: vscode.TextDocument,
+  position: vscode.Position
+): Promise<boolean> {
+  const def = normalizeLocations(
+    (await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[] | undefined>(
+      "vscode.executeDefinitionProvider",
+      document.uri,
+      position
+    )) ?? []
+  )[0];
+  if (!def) {
+    return false;
+  }
+  let symbols: vscode.DocumentSymbol[] | undefined;
+  try {
+    symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[] | undefined>(
+      "vscode.executeDocumentSymbolProvider",
+      def.uri
+    );
+  } catch {
+    return false;
+  }
+  const symbol = findInnermostSymbol(symbols, def.range.start);
+  return symbol ? ACCESS_AWARE_KINDS.has(symbol.kind) : false;
+}
+
+/**
+ * Classifies each range in a file as a read or write via the
+ * document-highlight provider (which tags occurrences `Read`/`Write`/`Text`).
+ * Keyed by `"line:character"` of the range start; ranges the provider doesn't
+ * cover (or when it's unavailable) default to `"read"`.
+ */
+async function classifyAccess(
+  uri: vscode.Uri,
+  ranges: vscode.Range[]
+): Promise<Map<string, "read" | "write">> {
+  const result = new Map<string, "read" | "write">();
+  let highlights: vscode.DocumentHighlight[] | undefined;
+  try {
+    highlights = await vscode.commands.executeCommand<vscode.DocumentHighlight[] | undefined>(
+      "vscode.executeDocumentHighlights",
+      uri,
+      ranges[0].start
+    );
+  } catch {
+    highlights = undefined;
+  }
+  for (const range of ranges) {
+    const hit = highlights?.find((h) => h.range.contains(range.start));
+    const access = hit?.kind === vscode.DocumentHighlightKind.Write ? "write" : "read";
+    result.set(`${range.start.line}:${range.start.character}`, access);
+  }
+  return result;
 }
 
 /**
@@ -314,7 +386,7 @@ export async function rerunSearch(search: Search): Promise<Search | undefined> {
     return undefined;
   }
 
-  const groups = await buildGroups(normalized);
+  const groups = await buildGroups(normalized, search.accessAware);
   const totalCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
   return {
@@ -342,8 +414,11 @@ function isLocationLink(
   return (item as vscode.LocationLink).targetUri !== undefined;
 }
 
-/** Groups normalized locations by file, sorted by relative path; items within a group sorted by position. */
-async function buildGroups(locations: NormalizedLocation[]): Promise<FileGroup[]> {
+/** Groups normalized locations by file, sorted by relative path; items within a group sorted by position. Classifies each item read/write when `accessAware`. */
+async function buildGroups(
+  locations: NormalizedLocation[],
+  accessAware: boolean
+): Promise<FileGroup[]> {
   const byUri = new Map<string, { uri: vscode.Uri; ranges: vscode.Range[] }>();
   for (const loc of locations) {
     const key = loc.uri.toString();
@@ -375,7 +450,10 @@ async function buildGroups(locations: NormalizedLocation[]): Promise<FileGroup[]
       lineTextByLine = undefined;
     }
 
-    const items: SearchResultItem[] = ranges.map((range) => buildItem(range, lineTextByLine));
+    const access = accessAware ? await classifyAccess(uri, ranges) : undefined;
+    const items: SearchResultItem[] = ranges.map((range) =>
+      buildItem(range, lineTextByLine, access?.get(`${range.start.line}:${range.start.character}`))
+    );
 
     const relativePath = vscode.workspace.asRelativePath(uri);
     const isTest = await classifier.isTestReference(uri);
@@ -402,7 +480,8 @@ async function buildGroups(locations: NormalizedLocation[]): Promise<FileGroup[]
 /** Trims the source line, caps it at {@link MAX_LINE_LENGTH}, and shifts the match offsets to match. */
 function buildItem(
   range: vscode.Range,
-  lineTextByLine: Map<number, string> | undefined
+  lineTextByLine: Map<number, string> | undefined,
+  access: "read" | "write" | undefined
 ): SearchResultItem {
   const fullLine = lineTextByLine?.get(range.start.line) ?? "";
   const leadingTrimLen = fullLine.length - fullLine.trimStart().length;
@@ -417,6 +496,7 @@ function buildItem(
     character,
     endCharacter,
     lineText: capped,
+    ...(access ? { access } : {}),
   };
 }
 

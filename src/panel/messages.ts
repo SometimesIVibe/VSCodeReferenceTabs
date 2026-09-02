@@ -7,7 +7,7 @@
  * plain-JS runtime.
  */
 
-import { Search, SearchKind } from "../model";
+import { AccessFilter, Search, SearchKind } from "../model";
 
 /** Lightweight per-search info for the tab bar — avoids shipping full result data for inactive tabs. */
 export interface SearchSummary {
@@ -93,6 +93,13 @@ export interface ToggleCallGroupMessage {
   collapsed: boolean;
 }
 
+/** webview -> ext: user toggled the Write-only / Read-only results filter for a tab. */
+export interface SetAccessFilterMessage {
+  type: "setAccessFilter";
+  id: string;
+  filter: AccessFilter;
+}
+
 /** webview -> ext: context-menu "Close Others" — closes every other unpinned tab. */
 export interface CloseOthersMessage {
   type: "closeOthers";
@@ -119,6 +126,7 @@ export type WebviewToExtensionMessage =
   | TogglePinMessage
   | ToggleCallNodeMessage
   | ToggleCallGroupMessage
+  | SetAccessFilterMessage
   | CloseOthersMessage
   | CloseAllMessage
   | CloseAllKeepPinnedMessage;

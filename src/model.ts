@@ -65,7 +65,18 @@ export interface SearchResultItem {
   endCharacter: number;
   /** Trimmed, length-capped preview of the source line. */
   lineText: string;
+  /**
+   * Whether this occurrence reads or writes the symbol, from the
+   * document-highlight provider (`Write` → `"write"`, everything else →
+   * `"read"`). Only set for access-aware searches (fields/properties/…); the
+   * Write-only / Read-only toolbar filter uses it to dim and sort the other
+   * kind down. Absent when not classified.
+   */
+  access?: "read" | "write";
 }
+
+/** The active Read/Write toolbar filter for a search's results. */
+export type AccessFilter = "none" | "writeOnly" | "readOnly";
 
 /** All matches within a single file. */
 export interface FileGroup {
@@ -157,6 +168,15 @@ export interface Search {
   callGroups?: CallGroup[];
   /** Sum of `items.length` across all groups, or the number of direct callers for a call-hierarchy search. */
   totalCount: number;
+  /**
+   * Whether the searched symbol is something that is read and written (a
+   * field/property/event/variable), so the Read-only / Write-only filter is
+   * meaningful. The toolbar toggles are disabled when this is false (methods,
+   * types, call hierarchies).
+   */
+  accessAware: boolean;
+  /** Active Read/Write filter for this tab; only has a visible effect when {@link accessAware}. */
+  accessFilter: AccessFilter;
   /**
    * Whether this tab is pinned. Pinned tabs sort leftmost, are exempt from
    * `maxSearches` eviction, and survive "Close All Tabs (Keep Pinned)".

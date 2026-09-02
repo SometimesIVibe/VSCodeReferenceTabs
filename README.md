@@ -50,6 +50,9 @@ the same behavior from their own providers.
   *document-symbol* providers.
 - **Tab labels** — the `new Foo()` label for a constructor and the
   `Property.get` label for an accessor — use the *document-symbol* provider.
+- **Read-only / Write-only filter** (for field/property/… searches) uses the
+  *document-highlight* provider to classify each result as a read or a write;
+  results it can't classify are treated as reads.
 - **Test-project marking** reads the nearest `.csproj` from disk and is
   therefore C#/.NET-specific; other languages are simply never marked as
   tests.

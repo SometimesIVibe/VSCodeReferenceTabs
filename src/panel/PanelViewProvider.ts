@@ -83,6 +83,9 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       case "toggleCallGroup":
         this.store.setCallGroupCollapsed(message.id, message.groupId, message.collapsed);
         break;
+      case "setAccessFilter":
+        this.store.setAccessFilter(message.id, message.filter);
+        break;
       case "closeOthers":
         this.store.closeOthers(message.id);
         break;

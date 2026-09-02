@@ -74,6 +74,8 @@ function makeSearch(id: string, overrides: Partial<Search> = {}): Search {
     groups: [],
     totalCount: 0,
     pinned: false,
+    accessAware: false,
+    accessFilter: "none",
     // Unique per default (derived from `id`) so existing tests, which never
     // intend to dedup, stay unaffected; dedup tests below override it.
     key: `key-${id}`,
@@ -479,6 +481,46 @@ suite("SearchStore", () => {
 
       assert.deepStrictEqual(store.all.map((s) => s.id), ["p", "u3"]);
       assert.deepStrictEqual(persistence.deletedIds.sort(), ["u1", "u2"]);
+    });
+  });
+
+  suite("access filter", () => {
+    test("setAccessFilter changes an access-aware tab and remembers it as the default", () => {
+      store.add(makeSearch("a", { accessAware: true, key: "a" }));
+      store.setAccessFilter("a", "writeOnly");
+
+      assert.strictEqual(store.all[0].accessFilter, "writeOnly");
+      assert.strictEqual(store.lastAccessFilter, "writeOnly");
+    });
+
+    test("setAccessFilter is a no-op for a non-access-aware tab", () => {
+      store.add(makeSearch("m", { accessAware: false, key: "m" }));
+      store.setAccessFilter("m", "readOnly");
+
+      assert.strictEqual(store.all[0].accessFilter, "none");
+      assert.strictEqual(store.lastAccessFilter, "none");
+    });
+
+    test("a new access-aware tab starts from the remembered filter; a non-aware one stays 'none'", () => {
+      store.add(makeSearch("a", { accessAware: true, key: "a" }));
+      store.setAccessFilter("a", "readOnly");
+
+      store.add(makeSearch("b", { accessAware: true, key: "b" }));
+      store.add(makeSearch("m", { accessAware: false, key: "m" }));
+
+      assert.strictEqual(store.all.find((s) => s.id === "b")!.accessFilter, "readOnly");
+      assert.strictEqual(store.all.find((s) => s.id === "m")!.accessFilter, "none");
+    });
+
+    test("re-adding the same key keeps the tab's own filter (not the fresh default)", () => {
+      store.add(makeSearch("a", { accessAware: true, key: "shared" }));
+      store.setAccessFilter(store.all[0].id, "writeOnly");
+
+      // Re-search the same target: a fresh Search with the same key.
+      store.add(makeSearch("a2", { accessAware: true, key: "shared" }));
+
+      assert.strictEqual(store.all.length, 1);
+      assert.strictEqual(store.all[0].accessFilter, "writeOnly");
     });
   });
 });

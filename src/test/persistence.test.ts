@@ -22,6 +22,8 @@ function makeSearch(id: string, overrides: Partial<Search> = {}): Search {
     groups: [],
     totalCount: 0,
     pinned: false,
+    accessAware: false,
+    accessFilter: "none",
     key: `key-${id}`,
     ...overrides,
   };

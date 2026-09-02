@@ -186,6 +186,23 @@ body {
   background-color: var(--vscode-toolbar-hoverBackground);
 }
 
+/* Write-only / Read-only toggles. Active = filled; disabled = greyed out
+   (shown for non-access-aware searches so the toolbar stays stable). */
+.icon-btn.access-filter.active {
+  background-color: var(--vscode-inputOption-activeBackground, var(--vscode-button-background));
+  color: var(--vscode-inputOption-activeForeground, var(--vscode-button-foreground));
+  outline: 1px solid var(--vscode-inputOption-activeBorder, transparent);
+}
+
+.icon-btn.access-filter.disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.icon-btn.access-filter.disabled:hover {
+  background: transparent;
+}
+
 /* Tab context menu — a single reusable element appended to <body> (outside
    #root) and positioned via the nonce'd #context-menu-position-style
    stylesheet in PanelViewProvider's HTML, since CSP forbids inline style=""
@@ -313,6 +330,28 @@ body {
 
 .result-row:hover {
   background-color: var(--vscode-list-hoverBackground);
+}
+
+/* A result filtered out by the Read/Write toggle: dimmed in a distinct hue
+   (a muted blue, deliberately different from the grey test dimming) and
+   badged with its access kind. Sorted below the kept rows by the webview. */
+.result-row.filtered-access .result-text,
+.result-row.filtered-access .result-line-number {
+  color: var(--vscode-charts-blue, var(--vscode-descriptionForeground));
+  opacity: 0.6;
+}
+
+.access-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--vscode-charts-blue, var(--vscode-descriptionForeground));
+  border: 1px solid var(--vscode-charts-blue, var(--vscode-descriptionForeground));
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
 }
 
 .result-line-number {

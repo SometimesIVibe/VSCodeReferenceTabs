@@ -53,6 +53,8 @@ export async function prepareIncomingCallHierarchy(
     createdAt: Date.now(),
     groups: [],
     pinned: false,
+    accessAware: false,
+    accessFilter: "none" as const,
     key: `callHierarchy|${root.uri.toString()}|${root.selectionRange.start.line}:${root.selectionRange.start.character}|${root.name}`,
   };
 
