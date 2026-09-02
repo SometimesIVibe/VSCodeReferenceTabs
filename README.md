@@ -28,6 +28,35 @@ All Implementations" flow with persistent, closable **tabs** in a dedicated
 
 <!-- TODO: screenshot of the Reference Tabs panel with two open tabs, one expanded -->
 
+## Requirements — language support
+
+Requires **VS Code 1.90 or newer**. No other installs are needed for the
+extension itself — its one dependency (highlight.js, for preview
+syntax-highlighting) is bundled.
+
+Beyond that, Reference Tabs is a UI over VS Code's own language providers; it
+does not analyze code itself. Each feature needs the matching provider to be supplied
+by a language extension for your language. For C# that means the Microsoft
+**C#** extension / **C# Dev Kit**, or the OmniSharp-based C# extension — any
+of them works; nothing here is tied to a specific one. Other languages get
+the same behavior from their own providers.
+
+- **Find All References** needs a *reference* provider.
+- **Find All Implementations** needs an *implementation* provider (the
+  command is offered wherever a reference provider exists, and reports no
+  results if there are none).
+- **Show Caller Hierarchy** needs a *call-hierarchy* provider. Its
+  interface grouping additionally uses the *implementation* and
+  *document-symbol* providers.
+- **Tab labels** — the `new Foo()` label for a constructor and the
+  `Property.get` label for an accessor — use the *document-symbol* provider.
+- **Test-project marking** reads the nearest `.csproj` from disk and is
+  therefore C#/.NET-specific; other languages are simply never marked as
+  tests.
+
+If a provider isn't available the affected command reports no results, and
+labels fall back to the plain symbol name — the search itself never fails.
+
 ## Install
 
 Install from a packaged `.vsix`:
