@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
 import { SearchStore } from "../store";
-import { incomingCallsFor } from "../callHierarchy";
+import { incomingCallsFor, loadChildLevel } from "../callHierarchy";
 import {
   SearchSummary,
   StateMessage,
@@ -102,21 +102,26 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
   }
 
   /**
-   * Expands or collapses a call-hierarchy node. On first expand the node's
-   * callers are fetched lazily; afterwards it is a pure collapse/expand toggle
-   * against the already-loaded children.
+   * Expands or collapses a call-hierarchy node. Collapsing is a pure toggle.
+   * Expanding pre-fetches one level below the children about to be shown (a
+   * one-breadth-down lookahead) so their test-branch state — including "only
+   * used by tests" — is already known when they appear, rather than filled in
+   * only after the user expands them in turn. The node's own children are
+   * normally already loaded from its parent's lookahead; the fallback fetches
+   * them if not.
    */
   private async toggleCallNode(searchId: string, nodeId: string): Promise<void> {
     const node = this.store.getCallNode(searchId, nodeId);
     if (!node) {
       return;
     }
-    if (node.loaded) {
-      this.store.setCallNodeExpanded(searchId, nodeId, !node.expanded);
+    if (node.expanded) {
+      this.store.setCallNodeExpanded(searchId, nodeId, false);
       return;
     }
     try {
-      const children = await incomingCallsFor(node);
+      const children = node.loaded ? node.children : await incomingCallsFor(node);
+      await loadChildLevel(children);
       this.store.setCallNodeChildren(searchId, nodeId, children);
     } catch {
       void vscode.window.showWarningMessage("Reference Tabs: could not load callers.");

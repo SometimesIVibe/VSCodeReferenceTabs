@@ -80,6 +80,7 @@ export async function prepareIncomingCallHierarchy(
     );
     return undefined;
   }
+  await loadChildLevel(roots);
   recomputeAndSort(roots);
   return { ...base, callTree: roots, totalCount: roots.length };
 }
@@ -100,7 +101,9 @@ async function buildInterfaceGroups(
     return undefined;
   }
 
-  const groups: CallGroup[] = [makeGroup(enclosing.name, "interface", await incomingCallsFor(root))];
+  const groups: CallGroup[] = [
+    await makeGroup(enclosing.name, "interface", await incomingCallsFor(root)),
+  ];
 
   const seen = new Set<string>([locationKey(root.uri, root.selectionRange.start)]);
   const implementations = normalizeLocations(
@@ -129,18 +132,47 @@ async function buildInterfaceGroups(
     }
     const type = await enclosingType(impl.uri, impl.range.start);
     const title = type?.name ?? (implItem.detail || implItem.name);
-    groups.push(makeGroup(title, "implementation", await incomingCallsFor(implItem)));
+    groups.push(await makeGroup(title, "implementation", await incomingCallsFor(implItem)));
   }
 
   orderCallGroups(groups);
   return groups;
 }
 
-/** Builds a group, rolling up + sorting its roots and pre-collapsing it when all its callers are test. */
-function makeGroup(title: string, kind: CallGroup["kind"], roots: CallNode[]): CallGroup {
+/** Builds a group: pre-fetches one level below each root (so test-branch state is known without expanding), rolls up + sorts, and pre-collapses when all callers are test. */
+async function makeGroup(
+  title: string,
+  kind: CallGroup["kind"],
+  roots: CallNode[]
+): Promise<CallGroup> {
+  await loadChildLevel(roots);
   recomputeAndSort(roots);
   const isTest = allRootsTest(roots);
   return { id: randomUUID(), title, kind, roots, isTest, collapsed: isTest };
+}
+
+/**
+ * Eagerly loads the direct callers (one breadth down) of each not-yet-loaded
+ * node, in parallel. This lets the roll-up decide a node's test-branch state
+ * — including "only used by tests" for a production node whose callers are all
+ * tests — from the node's own children, so the marking is shown immediately
+ * rather than only after the user expands. Applied to the rows about to be
+ * displayed: the initial roots, and (on expand) an expanded node's children.
+ */
+export async function loadChildLevel(nodes: CallNode[]): Promise<void> {
+  await Promise.all(
+    nodes.map(async (node) => {
+      if (node.loaded) {
+        return;
+      }
+      try {
+        node.children = await incomingCallsFor(node);
+      } catch {
+        node.children = [];
+      }
+      node.loaded = true;
+    })
+  );
 }
 
 /**
