@@ -342,7 +342,6 @@ body {
 }
 
 .access-badge {
-  margin-left: auto;
   flex-shrink: 0;
   color: var(--vscode-charts-blue, var(--vscode-descriptionForeground));
   border: 1px solid var(--vscode-charts-blue, var(--vscode-descriptionForeground));
@@ -363,6 +362,11 @@ body {
 }
 
 .result-text {
+  /* Take only the width the line needs (shrinking with an ellipsis when long)
+     so the Read/Write access badge sits directly after the line rather than
+     at the far right of the row. */
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
