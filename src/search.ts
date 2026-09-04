@@ -457,14 +457,17 @@ async function buildGroups(
 
     const relativePath = vscode.workspace.asRelativePath(uri);
     const isTest = await classifier.isTestReference(uri);
+    const accessKind = accessAware ? groupAccessKind(items) : undefined;
     groups.push({
       uri: uri.toString(),
       relativePath,
       items,
-      // Test-project groups start collapsed so the non-test results are what
-      // you see first; non-test groups start expanded.
-      collapsed: isTest,
+      // Test groups and homogeneous read-only / write-only groups start
+      // collapsed, so the non-test and the mixed read/write groups — the ones
+      // worth reading — are what you see first.
+      collapsed: isTest || accessKind === "read" || accessKind === "write",
       isTest,
+      ...(accessKind ? { accessKind } : {}),
     });
   }
 
@@ -475,6 +478,31 @@ async function buildGroups(
       Number(a.isTest) - Number(b.isTest) || a.relativePath.localeCompare(b.relativePath)
   );
   return groups;
+}
+
+/** Whether a group's classified items are all reads, all writes, or a mix; `undefined` when none are classified. */
+function groupAccessKind(
+  items: SearchResultItem[]
+): "read" | "write" | "mixed" | undefined {
+  let hasRead = false;
+  let hasWrite = false;
+  for (const item of items) {
+    if (item.access === "read") {
+      hasRead = true;
+    } else if (item.access === "write") {
+      hasWrite = true;
+    }
+  }
+  if (hasRead && hasWrite) {
+    return "mixed";
+  }
+  if (hasRead) {
+    return "read";
+  }
+  if (hasWrite) {
+    return "write";
+  }
+  return undefined;
 }
 
 /** Trims the source line, caps it at {@link MAX_LINE_LENGTH}, and shifts the match offsets to match. */

@@ -97,6 +97,13 @@ export interface FileGroup {
    * without it (rendered as non-test) until the search is re-run.
    */
   isTest: boolean;
+  /**
+   * For an access-aware search (field/property/…), whether this file's
+   * results are all reads, all writes, or a mix. A homogeneous group ("read"
+   * or "write") starts collapsed with an "Only Reads"/"Only Writes" label so
+   * mixed groups stand out. `undefined` for non-access-aware searches.
+   */
+  accessKind?: "read" | "write" | "mixed";
 }
 
 /**
