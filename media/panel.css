@@ -346,6 +346,16 @@ body {
   background-color: var(--vscode-list-hoverBackground);
 }
 
+/* The search origin (the occurrence the search was invoked from): dimmed
+   yellow with an "origin" label. Declared BEFORE the Read/Write rule below so
+   that, when a row is both, the Read/Write dimming wins (equal specificity,
+   later source order) — the origin marking is lower precedence. */
+.result-row.origin .result-text,
+.result-row.origin .result-line-number {
+  color: var(--vscode-charts-yellow, var(--vscode-editorWarning-foreground, #cca700));
+  opacity: 0.7;
+}
+
 /* A result filtered out by the Read/Write toggle: dimmed in a distinct hue
    (a muted blue, deliberately different from the grey test dimming) and
    badged with its access kind. Sorted below the kept rows by the webview. */
@@ -359,6 +369,18 @@ body {
   flex-shrink: 0;
   color: var(--vscode-charts-blue, var(--vscode-descriptionForeground));
   border: 1px solid var(--vscode-charts-blue, var(--vscode-descriptionForeground));
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.origin-badge {
+  flex-shrink: 0;
+  color: var(--vscode-charts-yellow, var(--vscode-editorWarning-foreground, #cca700));
+  border: 1px solid var(--vscode-charts-yellow, var(--vscode-editorWarning-foreground, #cca700));
   border-radius: 3px;
   padding: 0 4px;
   font-size: 0.75em;

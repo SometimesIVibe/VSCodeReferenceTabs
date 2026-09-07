@@ -73,6 +73,12 @@ export interface SearchResultItem {
    * kind down. Absent when not classified.
    */
   access?: "read" | "write";
+  /**
+   * Whether this occurrence is the one the search was invoked from (the symbol
+   * under the cursor). Marked yellow with an "origin" label. Lower precedence
+   * than the Read/Write dimming, but both labels show when both apply.
+   */
+  origin?: boolean;
 }
 
 /** The active Read/Write toolbar filter for a search's results. */

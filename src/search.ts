@@ -66,7 +66,10 @@ export async function runSearch(
   }
 
   const accessAware = kind === "references" && (await isAccessAwareTarget(document, position));
-  const groups = await buildGroups(normalized, accessAware);
+  const groups = await buildGroups(normalized, accessAware, {
+    uri: document.uri.toString(),
+    position: wordRange.start,
+  });
   const totalCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
   return {
@@ -386,7 +389,10 @@ export async function rerunSearch(search: Search): Promise<Search | undefined> {
     return undefined;
   }
 
-  const groups = await buildGroups(normalized, search.accessAware);
+  const groups = await buildGroups(normalized, search.accessAware, {
+    uri: document.uri.toString(),
+    position: wordRange.start,
+  });
   const totalCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
   return {
@@ -414,10 +420,11 @@ function isLocationLink(
   return (item as vscode.LocationLink).targetUri !== undefined;
 }
 
-/** Groups normalized locations by file, sorted by relative path; items within a group sorted by position. Classifies each item read/write when `accessAware`. */
+/** Groups normalized locations by file, sorted by relative path; items within a group sorted by position. Classifies each item read/write when `accessAware`, and marks the origin occurrence. */
 async function buildGroups(
   locations: NormalizedLocation[],
-  accessAware: boolean
+  accessAware: boolean,
+  origin?: { uri: string; position: vscode.Position }
 ): Promise<FileGroup[]> {
   const byUri = new Map<string, { uri: vscode.Uri; ranges: vscode.Range[] }>();
   for (const loc of locations) {
@@ -451,9 +458,14 @@ async function buildGroups(
     }
 
     const access = accessAware ? await classifyAccess(uri, ranges) : undefined;
-    const items: SearchResultItem[] = ranges.map((range) =>
-      buildItem(range, lineTextByLine, access?.get(`${range.start.line}:${range.start.character}`))
-    );
+    const isOriginFile = origin !== undefined && uri.toString() === origin.uri;
+    const items: SearchResultItem[] = ranges.map((range) => {
+      const item = buildItem(range, lineTextByLine, access?.get(`${range.start.line}:${range.start.character}`));
+      if (isOriginFile && origin && rangeCoversPosition(range, origin.position)) {
+        item.origin = true;
+      }
+      return item;
+    });
 
     const relativePath = vscode.workspace.asRelativePath(uri);
     const isTest = await classifier.isTestReference(uri);
@@ -478,6 +490,15 @@ async function buildGroups(
       Number(a.isTest) - Number(b.isTest) || a.relativePath.localeCompare(b.relativePath)
   );
   return groups;
+}
+
+/** True when `position` falls within `range` on its start line (identifier ranges are single-line) — used to find the origin occurrence. */
+function rangeCoversPosition(range: vscode.Range, position: vscode.Position): boolean {
+  return (
+    position.line === range.start.line &&
+    position.character >= range.start.character &&
+    position.character <= range.end.character
+  );
 }
 
 /** Whether a group's classified items are all reads, all writes, or a mix; `undefined` when none are classified. */
