@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { Search } from "../model";
+import { FileGroup, Search } from "../model";
 import { SearchPersistence } from "../persistence";
 import { SearchStore } from "../store";
 
@@ -521,6 +521,45 @@ suite("SearchStore", () => {
 
       assert.strictEqual(store.all.length, 1);
       assert.strictEqual(store.all[0].accessFilter, "writeOnly");
+    });
+
+    test("a homogeneous group collapses only under the opposing filter, never by default", () => {
+      const group = (accessKind: "read" | "write" | "mixed"): FileGroup => ({
+        uri: `file:///${accessKind}`,
+        relativePath: `${accessKind}.cs`,
+        items: [],
+        collapsed: false,
+        isTest: false,
+        accessKind,
+      });
+      store.add(
+        makeSearch("a", {
+          accessAware: true,
+          key: "a",
+          groups: [group("read"), group("write"), group("mixed")],
+        })
+      );
+      const byKind = (k: string) => store.all[0].groups.find((g) => g.accessKind === k)!;
+
+      // Default (no filter): nothing collapsed by access.
+      assert.strictEqual(byKind("read").collapsed, false);
+      assert.strictEqual(byKind("write").collapsed, false);
+
+      // Write-only hides reads -> only the "read" group collapses.
+      store.setAccessFilter("a", "writeOnly");
+      assert.strictEqual(byKind("read").collapsed, true);
+      assert.strictEqual(byKind("write").collapsed, false);
+      assert.strictEqual(byKind("mixed").collapsed, false);
+
+      // Read-only hides writes -> the read group re-expands, the write collapses.
+      store.setAccessFilter("a", "readOnly");
+      assert.strictEqual(byKind("read").collapsed, false);
+      assert.strictEqual(byKind("write").collapsed, true);
+
+      // Back to none -> both expanded again.
+      store.setAccessFilter("a", "none");
+      assert.strictEqual(byKind("read").collapsed, false);
+      assert.strictEqual(byKind("write").collapsed, false);
     });
   });
 });

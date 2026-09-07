@@ -81,6 +81,7 @@ export class SearchStore implements vscode.Disposable {
         pinned: existing.pinned,
         accessFilter: existing.accessFilter,
       };
+      applyAccessCollapse(merged);
       this.searches[existingIndex] = merged;
       this.activeSearchId = merged.id;
 
@@ -92,6 +93,7 @@ export class SearchStore implements vscode.Disposable {
 
     // A new tab starts from the remembered filter, but only where it applies.
     search.accessFilter = search.accessAware ? this.lastAccessFilter : "none";
+    applyAccessCollapse(search);
     this.searches.push(search);
     this.activeSearchId = search.id;
 
@@ -370,6 +372,7 @@ export class SearchStore implements vscode.Disposable {
       return;
     }
     search.accessFilter = filter;
+    applyAccessCollapse(search);
     void this.workspaceState?.update(ACCESS_FILTER_KEY, filter);
     this.persistence?.scheduleSave(search);
     this._onDidChange.fire();
@@ -485,5 +488,27 @@ export class SearchStore implements vscode.Disposable {
       this.searches.map((s) => s.id)
     );
     void this.workspaceState.update(ACTIVE_ID_KEY, this.activeSearchId);
+  }
+}
+
+/**
+ * Collapses a homogeneous read/write group only when the active filter hides
+ * it — an "Only Reads" group under Write-only, an "Only Writes" group under
+ * Read-only — and otherwise leaves it expanded. Test groups keep their own
+ * collapse; mixed groups are left as-is. Re-applied whenever the filter
+ * changes, so the collapse tracks the toggle rather than being a default.
+ */
+function applyAccessCollapse(search: Search): void {
+  if (!search.accessAware) {
+    return;
+  }
+  for (const group of search.groups) {
+    if (group.accessKind !== "read" && group.accessKind !== "write") {
+      continue;
+    }
+    const hiddenByFilter =
+      (search.accessFilter === "writeOnly" && group.accessKind === "read") ||
+      (search.accessFilter === "readOnly" && group.accessKind === "write");
+    group.collapsed = group.isTest || hiddenByFilter;
   }
 }

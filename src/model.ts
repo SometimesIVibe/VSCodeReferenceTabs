@@ -106,8 +106,10 @@ export interface FileGroup {
   /**
    * For an access-aware search (field/property/…), whether this file's
    * results are all reads, all writes, or a mix. A homogeneous group ("read"
-   * or "write") starts collapsed with an "Only Reads"/"Only Writes" label so
-   * mixed groups stand out. `undefined` for non-access-aware searches.
+   * or "write") carries an "Only Reads"/"Only Writes" label and is collapsed
+   * only while the opposing filter hides it (an "Only Reads" group under the
+   * Write-only filter, an "Only Writes" group under Read-only). `undefined`
+   * for non-access-aware searches.
    */
   accessKind?: "read" | "write" | "mixed";
 }

@@ -474,10 +474,10 @@ async function buildGroups(
       uri: uri.toString(),
       relativePath,
       items,
-      // Test groups and homogeneous read-only / write-only groups start
-      // collapsed, so the non-test and the mixed read/write groups — the ones
-      // worth reading — are what you see first.
-      collapsed: isTest || accessKind === "read" || accessKind === "write",
+      // Test groups start collapsed. A homogeneous read/write group is only
+      // collapsed when the opposing filter hides it — the store applies that
+      // and re-applies it when the filter changes (see applyAccessCollapse).
+      collapsed: isTest,
       isTest,
       ...(accessKind ? { accessKind } : {}),
     });
