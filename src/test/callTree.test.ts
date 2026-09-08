@@ -1,6 +1,12 @@
 import * as assert from "assert";
 import { CallGroup, CallNode } from "../model";
-import { allRootsTest, findCallNode, orderCallGroups, recomputeAndSort } from "../callTree";
+import {
+  allRootsTest,
+  dedupeCallNodesByLocation,
+  findCallNode,
+  orderCallGroups,
+  recomputeAndSort,
+} from "../callTree";
 
 /**
  * Pure unit suite for the call-tree roll-up + ordering ({@link recomputeAndSort})
@@ -141,6 +147,34 @@ suite("callTree", () => {
         allRootsTest([node("A", true, { branchTest: true }), node("B", false, { branchTest: false })]),
         false
       );
+    });
+  });
+
+  suite("dedupeCallNodesByLocation", () => {
+    function at(uri: string, line: number, character = 0): CallNode {
+      return node("n", false, {
+        uri,
+        selectionRange: { startLine: line, startCharacter: character, endLine: line, endCharacter: character + 1 },
+      });
+    }
+
+    test("drops callers that resolve to the same file + selection-range start, keeping the first", () => {
+      const a = at("file:///A.cs", 10);
+      const dupOfA = at("file:///A.cs", 10);
+      const b = at("file:///B.cs", 10);
+      const result = dedupeCallNodesByLocation([a, dupOfA, b]);
+      assert.strictEqual(result.length, 2);
+      assert.strictEqual(result[0], a);
+      assert.strictEqual(result[1], b);
+    });
+
+    test("keeps same-file callers on different lines/columns", () => {
+      const result = dedupeCallNodesByLocation([
+        at("file:///A.cs", 10, 4),
+        at("file:///A.cs", 20, 4),
+        at("file:///A.cs", 10, 8),
+      ]);
+      assert.strictEqual(result.length, 3);
     });
   });
 

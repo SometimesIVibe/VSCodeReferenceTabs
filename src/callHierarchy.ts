@@ -12,7 +12,12 @@ import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
 import { CallGroup, CallNode, PlainRange, Search } from "./model";
 import { TestProjectClassifier } from "./testProject";
-import { allRootsTest, orderCallGroups, recomputeAndSort } from "./callTree";
+import {
+  allRootsTest,
+  dedupeCallNodesByLocation,
+  orderCallGroups,
+  recomputeAndSort,
+} from "./callTree";
 
 // One classifier for the whole session: .csproj verdicts are effectively
 // stable within a session, so caching across every prepare/expand is safe and
@@ -132,7 +137,10 @@ async function buildInterfaceGroups(
     }
     const type = await enclosingType(impl.uri, impl.range.start);
     const title = type?.name ?? (implItem.detail || implItem.name);
-    groups.push(await makeGroup(title, "implementation", await incomingCallsFor(implItem)));
+    // Don't merge interface callers into an implementation group — the
+    // interface group above already lists them; this group shows only the
+    // callers that reach this concrete override directly.
+    groups.push(await makeGroup(title, "implementation", await incomingCallsFor(implItem, false)));
   }
 
   orderCallGroups(groups);
@@ -190,37 +198,153 @@ export async function loadChildLevel(nodes: CallNode[]): Promise<void> {
  * last-resort fallback when prepare yields nothing.
  */
 export async function incomingCallsFor(
-  target: vscode.CallHierarchyItem | CallNode
+  target: vscode.CallHierarchyItem | CallNode,
+  mergeInterfaceCallers = true
 ): Promise<CallNode[]> {
   const item =
     target instanceof vscode.CallHierarchyItem
       ? target
       : (await resolveNativeItem(target)) ?? reconstructItem(target);
 
-  const calls = await vscode.commands.executeCommand<
-    vscode.CallHierarchyIncomingCall[] | undefined
-  >("vscode.provideIncomingCalls", item);
+  // Also gather callers of the interface member(s) this method implements, so
+  // the tree walks through interface dispatch (a call made through the
+  // interface resolves to the interface member, not the concrete override).
+  const sources: vscode.CallHierarchyItem[] = [item];
+  if (mergeInterfaceCallers) {
+    sources.push(...(await interfaceMemberItems(item)));
+  }
 
   const nodes: CallNode[] = [];
-  for (const call of calls ?? []) {
-    const from = call.from;
-    const isTest = await classifier.isTestReference(from.uri);
-    nodes.push({
-      id: randomUUID(),
-      name: from.name,
-      detail: from.detail ?? "",
-      symbolKind: from.kind,
-      uri: from.uri.toString(),
-      range: toPlainRange(from.range),
-      selectionRange: toPlainRange(from.selectionRange),
-      isTest,
-      branchTest: isTest,
-      loaded: false,
-      expanded: false,
-      children: [],
-    });
+  for (const source of sources) {
+    const calls = await vscode.commands.executeCommand<
+      vscode.CallHierarchyIncomingCall[] | undefined
+    >("vscode.provideIncomingCalls", source);
+    for (const call of calls ?? []) {
+      nodes.push(await toCallNode(call.from));
+    }
   }
-  return nodes;
+  return dedupeCallNodesByLocation(nodes);
+}
+
+/** Builds an unexpanded {@link CallNode} from a caller item, classifying its file test/non-test. */
+async function toCallNode(from: vscode.CallHierarchyItem): Promise<CallNode> {
+  const isTest = await classifier.isTestReference(from.uri);
+  return {
+    id: randomUUID(),
+    name: from.name,
+    detail: from.detail ?? "",
+    symbolKind: from.kind,
+    uri: from.uri.toString(),
+    range: toPlainRange(from.range),
+    selectionRange: toPlainRange(from.selectionRange),
+    isTest,
+    branchTest: isTest,
+    loaded: false,
+    expanded: false,
+    children: [],
+  };
+}
+
+// Caches the interface member(s) a method implements, keyed by the method's
+// location, so the type-hierarchy walk runs once per method per session.
+const interfaceMembersCache = new Map<string, { uri: string; position: PlainRange }[]>();
+
+/** Prepared call-hierarchy items for the interface member(s) `item` implements (empty when it implements none, or on any failure). */
+async function interfaceMemberItems(
+  item: vscode.CallHierarchyItem
+): Promise<vscode.CallHierarchyItem[]> {
+  let locations: { uri: string; position: PlainRange }[];
+  const key = `${item.uri.toString()}:${item.selectionRange.start.line}:${item.selectionRange.start.character}`;
+  const cached = interfaceMembersCache.get(key);
+  if (cached) {
+    locations = cached;
+  } else {
+    locations = await computeInterfaceMemberLocations(item);
+    interfaceMembersCache.set(key, locations);
+  }
+
+  const items: vscode.CallHierarchyItem[] = [];
+  for (const loc of locations) {
+    const prepared = (
+      await vscode.commands.executeCommand<vscode.CallHierarchyItem[] | undefined>(
+        "vscode.prepareCallHierarchy",
+        vscode.Uri.parse(loc.uri),
+        new vscode.Position(loc.position.startLine, loc.position.startCharacter)
+      )
+    )?.[0];
+    if (prepared) {
+      items.push(prepared);
+    }
+  }
+  return items;
+}
+
+/**
+ * Finds the interface member(s) `item` implements: locate its declaring type,
+ * take that type's interfaces from the type hierarchy, and match a same-named
+ * member in each. Returns their locations (empty when the method is itself an
+ * interface member, implements nothing, or the providers are unavailable).
+ */
+async function computeInterfaceMemberLocations(
+  item: vscode.CallHierarchyItem
+): Promise<{ uri: string; position: PlainRange }[]> {
+  const enclosing = await enclosingType(item.uri, item.selectionRange.start);
+  if (!enclosing || enclosing.kind === vscode.SymbolKind.Interface) {
+    return [];
+  }
+
+  const typeItem = (
+    await vscode.commands.executeCommand<vscode.TypeHierarchyItem[] | undefined>(
+      "vscode.prepareTypeHierarchy",
+      item.uri,
+      enclosing.selectionRange.start
+    )
+  )?.[0];
+  if (!typeItem) {
+    return [];
+  }
+  const supertypes =
+    (await vscode.commands.executeCommand<vscode.TypeHierarchyItem[] | undefined>(
+      "vscode.provideSupertypes",
+      typeItem
+    )) ?? [];
+
+  const name = baseName(item.name);
+  const locations: { uri: string; position: PlainRange }[] = [];
+  for (const supertype of supertypes) {
+    if (supertype.kind !== vscode.SymbolKind.Interface) {
+      continue;
+    }
+    const member = await findTypeMemberPosition(supertype, name);
+    if (member) {
+      locations.push({ uri: supertype.uri.toString(), position: member });
+    }
+  }
+  return locations;
+}
+
+/** Position of a same-named method member declared directly on `type`, via its document symbols. */
+async function findTypeMemberPosition(
+  type: vscode.TypeHierarchyItem,
+  name: string
+): Promise<PlainRange | undefined> {
+  const symbols = await documentSymbols(type.uri);
+  const typeSymbol = innermostType(symbols, type.selectionRange.start);
+  const members = typeSymbol ? typeSymbol.children : [];
+  for (const member of members) {
+    const isMethod =
+      member.kind === vscode.SymbolKind.Method || member.kind === vscode.SymbolKind.Function;
+    if (isMethod && baseName(member.name) === name) {
+      return toPlainRange(member.selectionRange);
+    }
+  }
+  return undefined;
+}
+
+/** A member/symbol name without its parameter list, so `Foo(int)` and `Foo` compare equal. */
+function baseName(name: string): string {
+  const paren = name.indexOf("(");
+  return (paren === -1 ? name : name.slice(0, paren)).trim();
 }
 
 /**
@@ -283,10 +407,15 @@ async function enclosingType(
   uri: vscode.Uri,
   position: vscode.Position
 ): Promise<vscode.DocumentSymbol | undefined> {
+  return innermostType(await documentSymbols(uri), position);
+}
+
+/** Hierarchical `DocumentSymbol`s for `uri` (empty when the provider is missing or returns a flat `SymbolInformation[]`). */
+async function documentSymbols(uri: vscode.Uri): Promise<vscode.DocumentSymbol[]> {
   const symbols = await vscode.commands.executeCommand<
     (vscode.DocumentSymbol | vscode.SymbolInformation)[] | undefined
   >("vscode.executeDocumentSymbolProvider", uri);
-  return innermostType((symbols ?? []).filter(isDocumentSymbol), position);
+  return (symbols ?? []).filter(isDocumentSymbol);
 }
 
 const TYPE_KINDS = new Set<vscode.SymbolKind>([

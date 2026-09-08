@@ -74,6 +74,26 @@ export function allRootsTest(roots: CallNode[]): boolean {
   return roots.length > 0 && roots.every((root) => root.branchTest);
 }
 
+/**
+ * Removes duplicate caller nodes that resolve to the same definition location
+ * (file + selection-range start), keeping the first. Used when a concrete
+ * method's own callers are merged with the callers of the interface member it
+ * implements — the same caller can otherwise appear from both queries.
+ */
+export function dedupeCallNodesByLocation(nodes: CallNode[]): CallNode[] {
+  const seen = new Set<string>();
+  const result: CallNode[] = [];
+  for (const node of nodes) {
+    const key = `${node.uri}:${node.selectionRange.startLine}:${node.selectionRange.startCharacter}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(node);
+  }
+  return result;
+}
+
 /** Depth-first lookup of the node with `id` anywhere in `nodes`; `undefined` if absent. */
 export function findCallNode(nodes: CallNode[], id: string): CallNode | undefined {
   for (const node of nodes) {
