@@ -49,6 +49,28 @@ export class PanelViewProvider implements vscode.WebviewViewProvider, vscode.Dis
         this.handleMessage(message)
       )
     );
+
+    // Stop writing to a disposed view (e.g. the panel is closed or moved),
+    // otherwise a later `.badge` write is lost or throws.
+    this.disposables.push(
+      webviewView.onDidDispose(() => {
+        if (this.view === webviewView) {
+          this.view = undefined;
+        }
+      })
+    );
+
+    // Re-sync the badge whenever the view (re)appears — VS Code restores the
+    // last badge value on a new window/reload, so correct it as soon as the
+    // view resolves or becomes visible again rather than only on a tab change.
+    this.disposables.push(
+      webviewView.onDidChangeVisibility(() => {
+        if (webviewView.visible) {
+          this.updateBadge();
+        }
+      })
+    );
+    this.updateBadge();
   }
 
   public dispose(): void {
