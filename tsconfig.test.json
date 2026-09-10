@@ -22,7 +22,8 @@
     "src/model.ts",
     "src/labels.ts",
     "src/testProject.ts",
-    "src/callTree.ts"
+    "src/callTree.ts",
+    "src/baseTypes.ts"
   ],
   "exclude": ["node_modules", "dist", "out", "out-test"]
 }

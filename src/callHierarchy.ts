@@ -12,6 +12,7 @@ import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
 import { CallGroup, CallNode, PlainRange, Search } from "./model";
 import { TestProjectClassifier } from "./testProject";
+import { baseTypeIdentifierOffsets } from "./baseTypes";
 import {
   allRootsTest,
   dedupeCallNodesByLocation,
@@ -293,49 +294,72 @@ async function computeInterfaceMemberLocations(
     return [];
   }
 
-  const typeItem = (
-    await vscode.commands.executeCommand<vscode.TypeHierarchyItem[] | undefined>(
-      "vscode.prepareTypeHierarchy",
-      item.uri,
-      enclosing.selectionRange.start
-    )
-  )?.[0];
-  if (!typeItem) {
-    return [];
-  }
-  const supertypes =
-    (await vscode.commands.executeCommand<vscode.TypeHierarchyItem[] | undefined>(
-      "vscode.provideSupertypes",
-      typeItem
-    )) ?? [];
-
+  // The declaring type's base-type list, resolved without a type-hierarchy
+  // provider (unavailable in some C# servers): read each base-type identifier
+  // in the class header and follow the definition provider to it — the ones
+  // landing on an interface with a same-named member are what this method
+  // implements. Matching the member by name also filters incidental
+  // identifiers (namespace qualifiers, generic-argument types).
   const name = baseName(item.name);
+  const seenInterface = new Set<string>();
   const locations: { uri: string; position: PlainRange }[] = [];
-  for (const supertype of supertypes) {
-    if (supertype.kind !== vscode.SymbolKind.Interface) {
-      continue;
-    }
-    const member = await findTypeMemberPosition(supertype, name);
-    if (member) {
-      locations.push({ uri: supertype.uri.toString(), position: member });
+  for (const position of await baseTypeIdentifierPositions(item.uri, enclosing)) {
+    const defs = normalizeLocations(
+      await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[] | undefined>(
+        "vscode.executeDefinitionProvider",
+        item.uri,
+        position
+      )
+    );
+    for (const def of defs) {
+      const symbols = await documentSymbols(def.uri);
+      const typeSymbol = innermostType(symbols, def.range.start);
+      if (!typeSymbol || typeSymbol.kind !== vscode.SymbolKind.Interface) {
+        continue;
+      }
+      const interfaceKey = `${def.uri.toString()}:${typeSymbol.selectionRange.start.line}:${typeSymbol.selectionRange.start.character}`;
+      if (seenInterface.has(interfaceKey)) {
+        continue;
+      }
+      seenInterface.add(interfaceKey);
+      const member = findMemberByName(typeSymbol, name);
+      if (member) {
+        locations.push({ uri: def.uri.toString(), position: toPlainRange(member.selectionRange) });
+      }
     }
   }
   return locations;
 }
 
-/** Position of a same-named method member declared directly on `type`, via its document symbols. */
-async function findTypeMemberPosition(
-  type: vscode.TypeHierarchyItem,
+/** Positions of the top-level identifiers in the class's base-type list (see `baseTypeIdentifierOffsets`), for the definition provider to resolve. */
+async function baseTypeIdentifierPositions(
+  uri: vscode.Uri,
+  classSymbol: vscode.DocumentSymbol
+): Promise<vscode.Position[]> {
+  let document: vscode.TextDocument;
+  try {
+    document = await vscode.workspace.openTextDocument(uri);
+  } catch {
+    return [];
+  }
+  const headerStart = classSymbol.selectionRange.end; // just after the type name
+  const headerStartOffset = document.offsetAt(headerStart);
+  const header = document.getText(new vscode.Range(headerStart, classSymbol.range.end));
+  return baseTypeIdentifierOffsets(header).map((offset) =>
+    document.positionAt(headerStartOffset + offset)
+  );
+}
+
+/** A same-named method member declared directly on `typeSymbol`, or `undefined`. */
+function findMemberByName(
+  typeSymbol: vscode.DocumentSymbol,
   name: string
-): Promise<PlainRange | undefined> {
-  const symbols = await documentSymbols(type.uri);
-  const typeSymbol = innermostType(symbols, type.selectionRange.start);
-  const members = typeSymbol ? typeSymbol.children : [];
-  for (const member of members) {
+): vscode.DocumentSymbol | undefined {
+  for (const member of typeSymbol.children) {
     const isMethod =
       member.kind === vscode.SymbolKind.Method || member.kind === vscode.SymbolKind.Function;
     if (isMethod && baseName(member.name) === name) {
-      return toPlainRange(member.selectionRange);
+      return member;
     }
   }
   return undefined;
