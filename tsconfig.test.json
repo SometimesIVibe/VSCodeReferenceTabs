@@ -21,6 +21,7 @@
     "src/search.ts",
     "src/model.ts",
     "src/labels.ts",
+    "src/signature.ts",
     "src/testProject.ts",
     "src/callTree.ts",
     "src/baseTypes.ts"

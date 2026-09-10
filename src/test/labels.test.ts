@@ -146,4 +146,65 @@ suite("SearchLabelBuilder", () => {
 
     assert.strictEqual(label, "Foo");
   });
+
+  test("a method's parameter suffix is appended to the plain-word label", () => {
+    const label = builder.build({
+      word: "ImportProductAsync",
+      lineTextBeforeWord: "await importer.",
+      paramSuffix: "(int, CancellationToken)",
+    });
+
+    assert.strictEqual(label, "ImportProductAsync(int, CancellationToken)");
+  });
+
+  test("no parameter suffix leaves the plain-word label unchanged (non-callable)", () => {
+    const label = builder.build({
+      word: "greeting",
+      lineTextBeforeWord: "return ",
+    });
+
+    assert.strictEqual(label, "greeting");
+  });
+
+  test("a `new Foo(` usage carries the constructor's parameter suffix", () => {
+    const label = builder.build({
+      word: "Foo",
+      lineTextBeforeWord: "var x = new ",
+      paramSuffix: "(IService)",
+    });
+
+    assert.strictEqual(label, "new Foo(IService)");
+  });
+
+  test("a `new Foo(` usage with no resolved signature falls back to empty parens", () => {
+    const label = builder.build({
+      word: "Foo",
+      lineTextBeforeWord: "var x = new ",
+    });
+
+    assert.strictEqual(label, "new Foo()");
+  });
+
+  test("a constructor declaration carries its parameter suffix", () => {
+    const label = builder.build({
+      word: "Foo",
+      lineTextBeforeWord: "  public ",
+      enclosingTypeName: "Foo",
+      wordFollowedByOpenParen: true,
+      paramSuffix: "(int, string)",
+    });
+
+    assert.strictEqual(label, "new Foo(int, string)");
+  });
+
+  test("an accessor label ignores any parameter suffix", () => {
+    const label = builder.build({
+      word: "get",
+      lineTextBeforeWord: "  ",
+      enclosing: { name: "greeting", kind: "property" },
+      paramSuffix: "(int)",
+    });
+
+    assert.strictEqual(label, "greeting.get");
+  });
 });

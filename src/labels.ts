@@ -37,6 +37,15 @@ export interface LabelInput {
   enclosingTypeName?: string | undefined;
   /** Whether `word` is immediately followed by `(` (ignoring whitespace) — a call/declaration signature. */
   wordFollowedByOpenParen?: boolean;
+  /**
+   * Formatted parameter-type list of the target's definition (e.g.
+   * `"(int, CancellationToken)"`, or `"()"` for a parameterless callable),
+   * when the target is a method/constructor and the definition's signature
+   * could be parsed. Appended to a method or constructor label so overloads
+   * get distinct labels (and dedup keys). `undefined` for non-callables and
+   * whenever the signature could not be resolved — the label is unchanged then.
+   */
+  paramSuffix?: string | undefined;
 }
 
 /**
@@ -47,20 +56,26 @@ export interface LabelInput {
  * 1. Accessor word (`get`/`set`/`init`/`add`/`remove`) with an enclosing
  *    symbol → `Enclosing.word`, stripping any `"(get) "`-style accessor
  *    prefix TypeScript's symbol provider puts on the enclosing name (the
- *    `.word` suffix already carries that information).
+ *    `.word` suffix already carries that information). No parameter suffix
+ *    (accessors take no parameter list).
  * 2. Constructor *usage* — `lineTextBeforeWord` ends with the `new` keyword
- *    (allowing a qualified `new Some.Ns.` prefix before `word`) → `new word()`.
+ *    (allowing a qualified `new Some.Ns.` prefix before `word`) → `new word(…)`.
  * 3. Constructor *declaration* — either the enclosing symbol's kind is
  *    `"constructor"`, or the token equals the enclosing type name and is
  *    immediately followed by `(` (a `ClassName(` signature — a constructor
  *    even when the provider labels it a plain method). The type-name form is
  *    what distinguishes it from the class declaration, whose name is followed
- *    by `:`/`{`/`<`, not `(`. → `new word()`.
- * 4. Otherwise → `word` unchanged.
+ *    by `:`/`{`/`<`, not `(`. → `new word(…)`.
+ * 4. Otherwise → `word`, with the parameter suffix appended when present (a
+ *    method call/declaration), unchanged otherwise.
+ *
+ * A resolved {@link LabelInput.paramSuffix} (`"(int, …)"` / `"()"`) is appended
+ * to the method and constructor forms; the constructor forms fall back to `()`
+ * when no signature could be resolved.
  */
 export class SearchLabelBuilder {
   public build(input: LabelInput): string {
-    const { word, lineTextBeforeWord, enclosing } = input;
+    const { word, lineTextBeforeWord, enclosing, paramSuffix } = input;
 
     if (ACCESSOR_WORDS.has(word) && enclosing) {
       const name = enclosing.name.replace(/^\((?:get|set|init|add|remove)\)\s+/, "");
@@ -68,17 +83,17 @@ export class SearchLabelBuilder {
     }
 
     if (this.isNewKeywordUsage(lineTextBeforeWord)) {
-      return `new ${word}()`;
+      return `new ${word}${paramSuffix ?? "()"}`;
     }
 
     const isConstructorDeclaration =
       enclosing?.kind === "constructor" ||
       (input.enclosingTypeName === word && !!input.wordFollowedByOpenParen);
     if (isConstructorDeclaration) {
-      return `new ${word}()`;
+      return `new ${word}${paramSuffix ?? "()"}`;
     }
 
-    return word;
+    return paramSuffix ? `${word}${paramSuffix}` : word;
   }
 
   /**

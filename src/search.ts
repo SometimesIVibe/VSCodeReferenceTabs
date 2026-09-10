@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
 import { EnclosingKind, SearchLabelBuilder } from "./labels";
+import { parameterSuffixFromDefinition } from "./signature";
 import { TestProjectClassifier } from "./testProject";
 import { FileGroup, Search, SearchKind, SearchResultItem } from "./model";
 
@@ -43,8 +44,11 @@ export async function runSearch(
     return undefined;
   }
   const word = document.getText(wordRange);
-  const symbol = await composeLabel(document, wordRange, word);
-  const key = await computeKey(kind, document, position, symbol, word);
+  // Resolved once and shared: the label's parameter suffix and the dedup key
+  // both key off the target's definition.
+  const definition = await resolveDefinition(document, position);
+  const symbol = await composeLabel(document, wordRange, word, definition);
+  const key = computeKey(kind, document, position, symbol, word, definition);
 
   const command =
     kind === "references"
@@ -159,48 +163,84 @@ async function classifyAccess(
 }
 
 /**
- * Computes the deterministic dedup key for a search target: resolves the
- * primary definition of the symbol under the cursor via
- * `vscode.executeDefinitionProvider` and combines it with `kind` and the
- * already-composed display `label` — `${kind}|${defUri}|${line}:${char}|${label}`.
- * The label is part of the key (not just the definition location) so that,
+ * Computes the deterministic dedup key for a search target from its resolved
+ * `definition` (see {@link resolveDefinition}), combining the definition's file
+ * with `kind` and the already-composed display `label` — `${kind}|${defUri}|${label}`.
+ *
+ * The definition's *file* is used but not its line/character: keying on the
+ * position made the key brittle across edits — inserting a line above a method
+ * shifts its definition, so a re-search after any edit would fail to reuse the
+ * existing tab and open a stale duplicate instead. Dropping the position makes
+ * reuse survive edits to the same symbol; the label still distinguishes
+ * different symbols in the same file.
+ *
+ * The label is part of the key (not just the definition file) so that,
  * e.g., a `new Foo()` constructor call and a plain `Foo` type reference never
  * collide even when TypeScript resolves both to the same class declaration
  * (see the search.test.ts case for this exact scenario), and so C# records
  * (primary constructor === record declaration) separate the two naturally.
+ * Because the label carries the target's parameter types (e.g.
+ * `Foo(int)` vs `Foo(string)`), overloads that share a name and file also get
+ * distinct keys and therefore their own tabs.
  *
  * Falls back to `${kind}|fallback|${originUri}|${originLine}|${word}` when
  * the provider is missing, returns no results, or throws — this still
  * uniquely identifies the origin of the search, just not the target symbol's
  * canonical definition.
  */
-async function computeKey(
+function computeKey(
   kind: SearchKind,
   document: vscode.TextDocument,
   position: vscode.Position,
   label: string,
-  word: string
-): Promise<string> {
-  const originUri = document.uri.toString();
-  const originLine = position.line;
-  const fallback = `${kind}|fallback|${originUri}|${originLine}|${word}`;
+  word: string,
+  definition: NormalizedLocation | undefined
+): string {
+  if (!definition) {
+    const originUri = document.uri.toString();
+    return `${kind}|fallback|${originUri}|${position.line}|${word}`;
+  }
+  return `${kind}|${definition.uri.toString()}|${label}`;
+}
 
+/** Resolves the primary definition of the symbol under the cursor, or `undefined` if none/failure. */
+async function resolveDefinition(
+  document: vscode.TextDocument,
+  position: vscode.Position
+): Promise<NormalizedLocation | undefined> {
   try {
     const raw = await vscode.commands.executeCommand<
       (vscode.Location | vscode.LocationLink)[] | undefined
     >("vscode.executeDefinitionProvider", document.uri, position);
-
-    const normalized = normalizeLocations(raw ?? []);
-    const primary = normalized[0];
-    if (!primary) {
-      return fallback;
-    }
-
-    const defUri = primary.uri.toString();
-    const { line, character } = primary.range.start;
-    return `${kind}|${defUri}|${line}:${character}|${label}`;
+    return normalizeLocations(raw ?? [])[0];
   } catch {
-    return fallback;
+    return undefined;
+  }
+}
+
+/**
+ * The formatted parameter-type suffix (`"(int, CancellationToken)"` / `"()"`)
+ * of the callable at `definition`, or `undefined` when the target isn't a
+ * callable or its signature can't be read. Opens the definition document and
+ * parses the source right after the name (see {@link parameterSuffixFromDefinition});
+ * any failure degrades to `undefined`, leaving the label unchanged.
+ */
+async function computeParameterSuffix(
+  definition: NormalizedLocation | undefined,
+  word: string
+): Promise<string | undefined> {
+  if (!definition) {
+    return undefined;
+  }
+  try {
+    const defDoc = await vscode.workspace.openTextDocument(definition.uri);
+    const start = defDoc.offsetAt(definition.range.start);
+    // A generous window past the name: enough for any real (even multi-line)
+    // signature, bounded so a huge file isn't sliced whole.
+    const defText = defDoc.getText().slice(start, start + 8000);
+    return parameterSuffixFromDefinition(defText, word);
+  } catch {
+    return undefined;
   }
 }
 
@@ -217,7 +257,8 @@ async function computeKey(
 async function composeLabel(
   document: vscode.TextDocument,
   wordRange: vscode.Range,
-  word: string
+  word: string,
+  definition: NormalizedLocation | undefined
 ): Promise<string> {
   let root: vscode.DocumentSymbol[] | undefined;
   try {
@@ -238,6 +279,7 @@ async function composeLabel(
   const lineTextBeforeWord = lineText.slice(0, wordRange.start.character);
   const wordFollowedByOpenParen = lineText.slice(wordRange.end.character).trimStart().startsWith("(");
   const enclosingTypeName = findEnclosingTypeName(root, wordRange.start);
+  const paramSuffix = await computeParameterSuffix(definition, word);
 
   return labelBuilder.build({
     word,
@@ -245,6 +287,7 @@ async function composeLabel(
     enclosing,
     enclosingTypeName,
     wordFollowedByOpenParen,
+    paramSuffix,
   });
 }
 

@@ -52,7 +52,7 @@ function positionOfTokenNear(
   return document.positionAt(tokenIndex);
 }
 
-/** Splits a `Search.key` (`${kind}|${defUri}|${line}:${char}|${label}`) into its definition-location component and its label component. */
+/** Splits a `Search.key` (`${kind}|${defUri}|${label}`) into its definition-file component and its label component. */
 function splitKeyLabel(key: string): { locationKey: string; label: string } {
   const parts = key.split("|");
   const label = parts.pop() ?? "";
@@ -189,7 +189,7 @@ suite("search (end-to-end against the fixture workspace)", () => {
 
     // TS's "go to definition" resolves both `EnglishGreeter` usages to the
     // same class declaration (no explicit constructor to distinguish them),
-    // so the definition-location component of the key is identical; only
+    // so the definition-file component of the key is identical; only
     // the label differs ("EnglishGreeter" vs "new EnglishGreeter()"), and
     // that is exactly what must keep the keys apart.
     const typeRef = splitKeyLabel(typeRefSearch!.key);
@@ -198,7 +198,7 @@ suite("search (end-to-end against the fixture workspace)", () => {
     assert.strictEqual(
       typeRef.locationKey,
       newExpr.locationKey,
-      "both usages must resolve to the same definition location"
+      "both usages must resolve to the same definition file"
     );
     assert.strictEqual(typeRef.label, "EnglishGreeter");
     assert.strictEqual(newExpr.label, "new EnglishGreeter()");
