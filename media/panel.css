@@ -186,12 +186,18 @@ body {
   background-color: var(--vscode-toolbar-hoverBackground);
 }
 
-/* Write-only / Read-only toggles. Active = filled; disabled = greyed out
+/* Write-only / Read-only toggles. They carry the same muted blue as the
+   Read/Write badges and the "Only Reads"/"Only Writes" group labels: blue
+   text when idle, and a filled-blue chip when active. Disabled = greyed out
    (shown for non-access-aware searches so the toolbar stays stable). */
+.icon-btn.access-filter {
+  color: var(--vscode-charts-blue, var(--vscode-foreground));
+}
+
 .icon-btn.access-filter.active {
-  background-color: var(--vscode-inputOption-activeBackground, var(--vscode-button-background));
-  color: var(--vscode-inputOption-activeForeground, var(--vscode-button-foreground));
-  outline: 1px solid var(--vscode-inputOption-activeBorder, transparent);
+  background-color: var(--vscode-charts-blue, var(--vscode-inputOption-activeBackground, var(--vscode-button-background)));
+  color: var(--vscode-button-foreground, var(--vscode-inputOption-activeForeground));
+  outline: 1px solid var(--vscode-charts-blue, var(--vscode-inputOption-activeBorder, transparent));
 }
 
 .icon-btn.access-filter.disabled {
@@ -300,6 +306,18 @@ body {
 
 .group-header.test .group-path {
   font-weight: 500;
+}
+
+/* A homogeneous read/write group collapsed by the opposing Read/Write filter:
+   tint its title and chevron with the same muted blue as its "Only Reads" /
+   "Only Writes" badge, so a filter-collapsed group reads as filtered rather
+   than merely closed. Placed after the `.test` rules (and carrying the extra
+   `[data-collapsed]` specificity) so it wins when a group is both test and
+   access-aware. */
+.group-header.access[data-collapsed="true"] .chevron,
+.group-header.access[data-collapsed="true"] .group-path {
+  color: var(--vscode-charts-blue, var(--vscode-descriptionForeground));
+  opacity: 0.85;
 }
 
 .group-test-badge {
