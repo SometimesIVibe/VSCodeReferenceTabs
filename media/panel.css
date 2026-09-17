@@ -311,11 +311,11 @@ body {
 /* A homogeneous read/write group collapsed by the opposing Read/Write filter:
    tint its title and chevron with the same muted blue as its "Only Reads" /
    "Only Writes" badge, so a filter-collapsed group reads as filtered rather
-   than merely closed. Placed after the `.test` rules (and carrying the extra
-   `[data-collapsed]` specificity) so it wins when a group is both test and
-   access-aware. */
-.group-header.access[data-collapsed="true"] .chevron,
-.group-header.access[data-collapsed="true"] .group-path {
+   than merely closed. Excludes test groups (`:not(.test)`) so the grey test
+   dimming keeps precedence when a group is both a test group and
+   access-collapsed. */
+.group-header.access:not(.test)[data-collapsed="true"] .chevron,
+.group-header.access:not(.test)[data-collapsed="true"] .group-path {
   color: var(--vscode-charts-blue, var(--vscode-descriptionForeground));
   opacity: 0.85;
 }
