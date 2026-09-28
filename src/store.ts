@@ -8,8 +8,6 @@ export const DEFAULT_MAX_SEARCHES = 30;
 
 const TAB_ORDER_KEY = "referenceTabs.tabOrder";
 const ACTIVE_ID_KEY = "referenceTabs.activeId";
-/** Remembered Read/Write filter, reused as the default for new tabs. Persists across sessions (not cleared on startup like tab state). */
-const ACCESS_FILTER_KEY = "referenceTabs.accessFilter";
 
 /**
  * In-memory collection of completed searches ("tabs").
@@ -28,6 +26,13 @@ export class SearchStore implements vscode.Disposable {
   private readonly searches: Search[] = [];
   private activeSearchId: string | undefined;
   private maxSearches: number = DEFAULT_MAX_SEARCHES;
+  /**
+   * The Read/Write filter last chosen in THIS session, reused as the default
+   * for new access-aware tabs. Deliberately in-memory only (not persisted): a
+   * new session always starts at "none", so the Read only / Write only toggles
+   * begin disabled/off rather than inheriting a previous session's choice.
+   */
+  private sessionAccessFilter: AccessFilter = "none";
 
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   public readonly onDidChange = this._onDidChange.event;
@@ -357,9 +362,9 @@ export class SearchStore implements vscode.Disposable {
     this._onDidChange.fire();
   }
 
-  /** The Read/Write filter last chosen by the user, used as the default for new access-aware tabs. Persists across sessions. */
+  /** The Read/Write filter last chosen in this session, used as the default for new access-aware tabs. Resets to "none" each new session (never persisted). */
   public get lastAccessFilter(): AccessFilter {
-    return this.workspaceState?.get<AccessFilter>(ACCESS_FILTER_KEY) ?? "none";
+    return this.sessionAccessFilter;
   }
 
   /**
@@ -373,7 +378,7 @@ export class SearchStore implements vscode.Disposable {
     }
     search.accessFilter = filter;
     applyAccessCollapse(search);
-    void this.workspaceState?.update(ACCESS_FILTER_KEY, filter);
+    this.sessionAccessFilter = filter;
     this.persistence?.scheduleSave(search);
     this._onDidChange.fire();
   }
