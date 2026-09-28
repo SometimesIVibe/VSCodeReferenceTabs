@@ -59,7 +59,7 @@ export async function runSearch(
     (vscode.Location | vscode.LocationLink)[] | undefined
   >(command, document.uri, position);
 
-  const normalized = normalizeLocations(raw ?? []);
+  const normalized = excludeDecompiledMetadata(normalizeLocations(raw ?? []));
 
   if (normalized.length === 0) {
     const kindLabel = kind === "references" ? "references" : "implementations";
@@ -422,7 +422,7 @@ export async function rerunSearch(search: Search): Promise<Search | undefined> {
     (vscode.Location | vscode.LocationLink)[] | undefined
   >(command, document.uri, wordRange.start);
 
-  const normalized = normalizeLocations(raw ?? []);
+  const normalized = excludeDecompiledMetadata(normalizeLocations(raw ?? []));
 
   if (normalized.length === 0) {
     const kindLabel = search.kind === "references" ? "references" : "implementations";
@@ -461,6 +461,22 @@ function isLocationLink(
   item: vscode.Location | vscode.LocationLink
 ): item is vscode.LocationLink {
   return (item as vscode.LocationLink).targetUri !== undefined;
+}
+
+/**
+ * True for the C# language server's decompiled "Metadata as Source" files —
+ * synthesized read-only sources for external/framework symbols that live under
+ * a temp `MetadataAsSource` directory (e.g. `/tmp/MetadataAsSource/…`). The
+ * built-in references view hides these; we drop them from displayed results so
+ * a reference/implementation search shows only real workspace occurrences.
+ */
+function isDecompiledMetadata(uri: vscode.Uri): boolean {
+  return /(^|[\\/])MetadataAsSource[\\/]/.test(uri.path);
+}
+
+/** Drops decompiled metadata-as-source locations (see {@link isDecompiledMetadata}). */
+function excludeDecompiledMetadata(locations: NormalizedLocation[]): NormalizedLocation[] {
+  return locations.filter((loc) => !isDecompiledMetadata(loc.uri));
 }
 
 /** Groups normalized locations by file, sorted by relative path; items within a group sorted by position. Classifies each item read/write when `accessAware`, and marks the origin occurrence. */
