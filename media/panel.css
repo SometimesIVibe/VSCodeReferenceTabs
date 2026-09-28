@@ -195,8 +195,12 @@ body {
 }
 
 .icon-btn.access-filter.active {
-  background-color: var(--vscode-charts-blue, var(--vscode-inputOption-activeBackground, var(--vscode-button-background)));
-  color: var(--vscode-button-foreground, var(--vscode-inputOption-activeForeground));
+  /* Fill with the theme's button accent — a darker colour whose paired
+     foreground is guaranteed legible — rather than the bright `charts-blue`,
+     on which white text reads poorly. Default to black (with white text) when
+     the theme omits the token. The blue outline keeps the palette tie. */
+  background-color: var(--vscode-button-background, black);
+  color: var(--vscode-button-foreground, white);
   outline: 1px solid var(--vscode-charts-blue, var(--vscode-inputOption-activeBorder, transparent));
 }
 
